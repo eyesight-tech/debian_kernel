@@ -67,8 +67,8 @@ static const struct ar0144_reg_value ar0144at_rev4_recommended_setting[] = {
 	{0X3EEA, 0x2A09},
 	{0x3060, 0x000D},
 	{0x3092, 0x00CF},
-	{0X3268, 0x0030},
-	{0X3786, 0x0060},
+	{0x3268, 0x0030},
+	{0x3786, 0x0006},
 	{0x3F4A, 0x0F70},
 	{0x306E, 0x4810},
 	{0x3064, 0x1802},
@@ -88,6 +88,7 @@ static const struct ar0144_reg_value ar0144at_pll_27mhz[] = {
 	{0x3030, 0x0042},
 	{0x3036, 0x000C},
 	{0x3038, 0x0001},
+	{0x30B0, 0x0038},
 };
 
 static const struct ar0144_reg_value ar0144at_mipi_2lane_12bit[] = {
@@ -102,12 +103,12 @@ static const struct ar0144_reg_value ar0144at_mipi_2lane_12bit[] = {
 	{0x31BC, 0x0004},
 };
 
-static const struct ar0144_reg_value ar0144at_1280x800_60fps[] = {
+static const struct ar0144_reg_value ar0144at_1280x800_30fps[] = {
 	{0x3002, 0x0000},
 	{0x3004, 0x0004},
 	{0x3006, 0x031F},
 	{0x3008, 0x0503},
-	{0x300A, 0x0339},
+	{0x300A, 0x05FE},
 	{0x300C, 0x05D0},
 	{0x3012, 0x0064},
 	{0x30A2, 0x0001},
@@ -116,17 +117,32 @@ static const struct ar0144_reg_value ar0144at_1280x800_60fps[] = {
 };
 
 static const struct ar0144_reg_value ar0144at_context_b_2x2_binning[] = {
-	{0x3040, 0x1000},
+	{0x3040, 0x0400},
 	{0x30A8, 0x0003},
-	{0x3040, 0x3000},
+	{0x3040, 0x0C00},
 	{0x30AE, 0x0003},
 };
 
 static const struct ar0144_reg_value ar0144at_embedded_data_stats[] = {
+	{0x3064, 0x1882},
 	{0x3064, 0x1982},
 };
 
+static const struct ar0144_reg_value ar0144at_auto_exposure[] = {
+	{0x3270, 0x0100},
+	{0x3100, 0x0003},
+	{0x311C, 0x0160},
+	{0x311C, 0x0160},
+	{0x3102, 0x5650},
+	{0x3108, 0x0008},
+	{0x310A, 0x0902},
+	{0x310C, 0x1008},
+	{0x310E, 0x1010},
+	{0x3110, 0x0048},
+};
+
 static const struct ar0144_reg_value ar0144at_start_stream[] = {
+	//{0x3070, 0x0002}, /* color bar pattern */
 	{0x3028, 0x0010},
 	{0x301A, 0x005C},
 };
@@ -233,6 +249,12 @@ static int ar0144_s_power(struct v4l2_subdev *sd, int on)
 		ret = -ENODEV;
 		goto out;
 	}
+
+	/* reset */
+	ret = ar0144_write_reg(ar0144, 0x301A, 0x00D9);
+	if (ret < 0)
+		goto out;
+	msleep(200);
 
 	ret = ar0144_set_register_array(
 		ar0144, ar0144at_rev4_recommended_setting,
@@ -388,8 +410,8 @@ static int ar0144_s_stream(struct v4l2_subdev *subdev, int enable)
 	if (ret < 0)
 		goto out;
 
-	ret = ar0144_set_register_array(ar0144, ar0144at_1280x800_60fps,
-					ARRAY_SIZE(ar0144at_1280x800_60fps));
+	ret = ar0144_set_register_array(ar0144, ar0144at_1280x800_30fps,
+					ARRAY_SIZE(ar0144at_1280x800_30fps));
 	if (ret < 0)
 		goto out;
 
@@ -402,6 +424,11 @@ static int ar0144_s_stream(struct v4l2_subdev *subdev, int enable)
 	ret = ar0144_set_register_array(
 		ar0144, ar0144at_embedded_data_stats,
 		ARRAY_SIZE(ar0144at_embedded_data_stats));
+	if (ret < 0)
+		goto out;
+
+	ret = ar0144_set_register_array(ar0144, ar0144at_auto_exposure,
+					ARRAY_SIZE(ar0144at_auto_exposure));
 	if (ret < 0)
 		goto out;
 
