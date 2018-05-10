@@ -272,7 +272,7 @@ static int ar0144_enum_mbus_code(struct v4l2_subdev *sd,
 	if (code->index > 0)
 		return -EINVAL;
 
-	code->code = MEDIA_BUS_FMT_SRGGB12_1X12;
+	code->code = MEDIA_BUS_FMT_Y12_1X12;;
 
 	return 0;
 }
@@ -281,7 +281,7 @@ static int ar0144_enum_frame_size(struct v4l2_subdev *subdev,
 				  struct v4l2_subdev_pad_config *cfg,
 				  struct v4l2_subdev_frame_size_enum *fse)
 {
-	if (fse->code != MEDIA_BUS_FMT_SRGGB12_1X12)
+	if (fse->code != MEDIA_BUS_FMT_Y12_1X12)
 		return -EINVAL;
 
 	if (fse->index >= 1)
@@ -349,7 +349,7 @@ static int ar0144_set_format(struct v4l2_subdev *sd,
 			format->which);
 	__format->width = 1280;
 	__format->height = 800;
-	__format->code = MEDIA_BUS_FMT_SRGGB12_1X12;
+	__format->code = MEDIA_BUS_FMT_Y12_1X12;;
 	__format->field = V4L2_FIELD_NONE;
 	__format->colorspace = V4L2_COLORSPACE_SRGB;
 
