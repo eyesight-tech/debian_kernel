@@ -529,6 +529,11 @@ static const struct ispsd_in_fmt rkisp1_isp_input_formats[] = {
 		.bayer_pat	= RAW_GRBG,
 		.bus_width	= 12,
 	}, {
+		.mbus_code	= MEDIA_BUS_FMT_Y12_1X12,
+		.fmt_type	= FMT_BAYER,
+		.mipi_dt	= CIF_CSI2_DT_RAW12,
+		.bus_width	= 12,
+	}, {
 		.mbus_code	= MEDIA_BUS_FMT_SRGGB8_1X8,
 		.fmt_type	= FMT_BAYER,
 		.mipi_dt	= CIF_CSI2_DT_RAW8,
@@ -594,6 +599,9 @@ static const struct ispsd_out_fmt rkisp1_isp_output_formats[] = {
 		.fmt_type	= FMT_BAYER,
 	}, {
 		.mbus_code	= MEDIA_BUS_FMT_SGRBG12_1X12,
+		.fmt_type	= FMT_BAYER,
+	}, {
+		.mbus_code	= MEDIA_BUS_FMT_Y12_1X12,
 		.fmt_type	= FMT_BAYER,
 	}, {
 		.mbus_code	= MEDIA_BUS_FMT_SRGGB10_1X10,
