@@ -590,11 +590,11 @@ static int ar0144_probe(struct i2c_client *client,
 
 	v4l2_i2c_subdev_init(&ar0144->sd, client, &ar0144_subdev_ops);
 	ar0144->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
-	ar0144->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
+	ar0144->sd.entity.type = MEDIA_ENT_T_V4L2_SUBDEV_SENSOR;
 	ar0144->pad.flags = MEDIA_PAD_FL_SOURCE;
 	ar0144->sd.dev = &client->dev;
 
-	ret = media_entity_pads_init(&ar0144->sd.entity, 1, &ar0144->pad);
+	ret = media_entity_init(&ar0144->sd.entity, 1, &ar0144->pad, 0);
 	if (ret < 0) {
 		dev_err(dev, "could not register media entity\n");
 		goto free_ctrls;
