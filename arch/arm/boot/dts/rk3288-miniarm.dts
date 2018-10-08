@@ -550,9 +550,23 @@
 		compatible = "sony,imx219";
 		reg = <0x10>;
 		clocks = <&ext_cam_clk>;
-		status = "okay";
+		status = "disabled";
 		port {
 			imx219_out: endpoint {
+				remote-endpoint = <&mipi_dphy_in>;
+				data-lanes = <1 2>;
+			};
+		};
+	};
+
+	camera-sensor@10 {
+		compatible = "onnn,ar0144";
+		reg = <0x10>;
+		clocks = <&ext_cam_clk>;
+		status = "okay";
+
+		port {
+			ar0144_out: endpoint {
 				remote-endpoint = <&mipi_dphy_in>;
 				data-lanes = <1 2>;
 			};
@@ -609,7 +623,7 @@
 			reg = <0>;
 
 			mipi_dphy_in: endpoint {
-				remote-endpoint = <&imx219_out>;
+				remote-endpoint = <&ar0144_out>;
 				data-lanes = <1 2>;
 			};
 		};
@@ -907,9 +921,12 @@
 	};
 
 	cam_pins {
+		cam_clk: cam-clk {
+			rockchip,pins = <2 11 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
 		cam_pwr: cam-pwr {
-			rockchip,pins = <0 17 RK_FUNC_GPIO &pcfg_pull_none>,
-			<2 0 RK_FUNC_GPIO &pcfg_pull_none>;
+			rockchip,pins = <2 0 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	};
 };
