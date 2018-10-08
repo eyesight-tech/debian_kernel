@@ -17,6 +17,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/types.h>
+#include <media/v4l2-ctrls.h>
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-subdev.h>
 
@@ -40,6 +41,9 @@ struct ar0144 {
 
 	struct gpio_desc *rst_gpio;
 	struct mutex lock;
+
+	struct v4l2_ctrl_handler ctrls;
+	struct v4l2_ctrl *link_freq;
 
 	bool streaming;
 };
@@ -131,6 +135,10 @@ static const struct ar0144_reg_value ar0144at_stop_stream[] = {
 	{0x301A, 0x0058},
 };
 
+static const s64 ar0144_link_freq[] = {
+	768000000,
+};
+
 static int ar0144_write_reg(struct ar0144 *ar0144, u16 reg, u16 val)
 {
 	u8 regbuf[4];
@@ -201,14 +209,19 @@ static int ar0144_s_power(struct v4l2_subdev *sd, int on)
 	u16 reg_val;
 	int ret = 0;
 
+	if (!on)
+		return 0;
+
 	mutex_lock(&ar0144->lock);
 
+#if 0
 	gpiod_direction_output(ar0144->rst_gpio, 1);
 	if (!on)
 		goto out;
 	msleep(2); /* more than 1ms */
 	gpiod_set_value_cansleep(ar0144->rst_gpio, 0);
 	msleep(10); /* more than 160000 clocks at 24MHz; FIXME: use clk rate */
+#endif
 
 	ret = ar0144_read_reg(ar0144, AR0144_ID_REG, &reg_val);
 	if (ret < 0)
@@ -423,6 +436,69 @@ static const struct v4l2_subdev_ops ar0144_subdev_ops = {
 	.pad = &ar0144_subdev_pad_ops,
 };
 
+struct ar0144_fdp_link_init_t {
+	u8 id;
+	u8 addr;
+	u8 val;
+} ar0144_fdp_link_init_arr[] = {
+	{0x3d, 0x4C, 0x01},
+	{0x3d, 0x20, 0x20},
+	{0x3d, 0x33, 0x23},
+	{0x3d, 0x58, 0xDE},
+	{0x3d, 0x6D, 0x7C},
+	{0x3d, 0x5C, 0x18},
+	{0x3d, 0x5D, 0x20},
+	{0x3d, 0x65, 0x20},
+	{0x19, 0x02, 0x13},
+	{0x3d, 0x12, 0x41},
+	{0x3d, 0x0F, 0x7B},
+	{0x19, 0x0E, 0x04},
+	{0x19, 0x33, 0x07},
+	{0x3d, 0x20, 0x20},
+};
+
+static int ar0144_fpd_link_i2c_write(struct i2c_adapter *i2c_master,
+				     struct ar0144_fdp_link_init_t *reg_item)
+{
+	struct i2c_msg msg;
+	u8 buf[2];
+	int ret;
+
+	msg.addr = reg_item->id;
+	msg.flags = 0;
+	msg.len = 2;
+	buf[0] = reg_item->addr;
+	buf[1] = reg_item->val;
+	msg.buf = buf;
+
+	ret = i2c_transfer(i2c_master, &msg, 1);
+	if (ret < 0)
+		return ret;
+	if (ret < 1)
+		return -EIO;
+
+	return 0;
+}
+
+/**
+ * This is a local board specific hack to initialize the FPD Link
+ * serializer/deserialzer bridge to the actual AR0144 sensor. Since we need to
+ * talk to more than one device, this routine uses the i2c master directly.
+ */
+static int ar0144_fpd_link_init(struct i2c_client *ar0144_i2c_client)
+{
+	int i, ret;
+
+	for (i = 0; i < ARRAY_SIZE(ar0144_fdp_link_init_arr); i++) {
+		ret = ar0144_fpd_link_i2c_write(ar0144_i2c_client->adapter,
+						&ar0144_fdp_link_init_arr[i]);
+		if (ret < 0)
+			return ret;
+	}
+
+	return 0;
+}
+
 static int ar0144_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
@@ -430,6 +506,10 @@ static int ar0144_probe(struct i2c_client *client,
 	struct device_node *endpoint;
 	struct ar0144 *ar0144;
 	int ret;
+
+	ret = ar0144_fpd_link_init(client);
+	if (ret < 0)
+		return ret;
 
 	ar0144 = devm_kzalloc(dev, sizeof(struct ar0144), GFP_KERNEL);
 	if (!ar0144)
@@ -459,12 +539,27 @@ static int ar0144_probe(struct i2c_client *client,
 		return -EINVAL;
 	}
 
+#if 0
 	ar0144->rst_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
 	if (IS_ERR(ar0144->rst_gpio)) {
 		if (PTR_ERR(ar0144->rst_gpio) != -EPROBE_DEFER)
 			dev_err(dev, "cannot get reset gpio\n");
 		return PTR_ERR(ar0144->rst_gpio);
 	}
+#endif
+
+	v4l2_ctrl_handler_init(&ar0144->ctrls, 1);
+	ar0144->link_freq = v4l2_ctrl_new_int_menu(&ar0144->ctrls, NULL,
+						   V4L2_CID_LINK_FREQ, 0, 0,
+						   ar0144_link_freq);
+	if (ar0144->link_freq)
+		ar0144->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+	if (ar0144->ctrls.error) {
+		dev_err(dev, "control initialization error\n");
+		ret = ar0144->ctrls.error;
+		goto free_ctrls;
+	}
+	ar0144->sd.ctrl_handler = &ar0144->ctrls;
 
 	v4l2_i2c_subdev_init(&ar0144->sd, client, &ar0144_subdev_ops);
 	ar0144->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
@@ -475,7 +570,7 @@ static int ar0144_probe(struct i2c_client *client,
 	ret = media_entity_pads_init(&ar0144->sd.entity, 1, &ar0144->pad);
 	if (ret < 0) {
 		dev_err(dev, "could not register media entity\n");
-		return ret;
+		goto free_ctrls;
 	}
 
 	ret = ar0144_s_power(&ar0144->sd, true);
@@ -498,6 +593,8 @@ static int ar0144_probe(struct i2c_client *client,
 
 free_entity:
 	media_entity_cleanup(&ar0144->sd.entity);
+free_ctrls:
+	v4l2_ctrl_handler_free(&ar0144->ctrls);
 
 	return ret;
 }
