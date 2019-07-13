@@ -514,30 +514,6 @@
 &i2c2 {
 	status = "okay";
 
-	camera0: ov5647@36 {
-		compatible = "ovti,ov5647";
-		reg = <0x36>;
-		clocks = <&ext_cam_clk>;
-		status = "disabled";
-		port {
-			ov5647_out: endpoint {
-			};
-		};
-	};
-
-	camera1: imx219@10 {
-		compatible = "sony,imx219";
-		reg = <0x10>;
-		clocks = <&ext_cam_clk>;
-		status = "disabled";
-		port {
-			imx219_out: endpoint {
-				remote-endpoint = <&mipi_dphy_in>;
-				data-lanes = <1 2>;
-			};
-		};
-	};
-
 	camera-sensor@10 {
 		compatible = "onnn,ar0144";
 		reg = <0x10>;
