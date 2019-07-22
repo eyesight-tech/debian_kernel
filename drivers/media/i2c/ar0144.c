@@ -57,6 +57,9 @@ struct ar0144 {
 
 	struct v4l2_ctrl_handler ctrls;
 	struct v4l2_ctrl *link_freq;
+	struct v4l2_ctrl *hblank;
+	struct v4l2_ctrl *vblank;
+	struct v4l2_ctrl *pixel_rate;
 
 	unsigned hflip:1;
 	unsigned vflip:1;
@@ -70,6 +73,17 @@ struct ar0144 {
 	u16 ae_roi_y_size;	
 
 	bool streaming;
+
+	const struct ar0144_mode *cur_mode;
+};
+
+struct ar0144_mode {
+	u32 width;
+	u32 height;
+	u32 max_fps;
+	u32 hts_def;
+	u32 vts_def;
+	struct ar0144_reg_value const *reg_list;
 };
 
 static inline struct ar0144 *to_ar0144(struct v4l2_subdev *sd)
@@ -177,6 +191,17 @@ static const struct ar0144_reg_value ar0144at_stop_stream[] = {
 
 static const s64 ar0144_link_freq[] = {
 	768000000,
+};
+
+static const struct ar0144_mode supported_modes[] = {
+	{
+	 .width = 1280,
+	 .height = 800,
+	 .max_fps = 30,
+	 .hts_def = 0x0768,
+	 .vts_def = 0x058c,
+	 .reg_list = ar0144at_1280x800_30fps,
+	 },
 };
 
 static int ar0144_write_reg8(struct ar0144 *ar0144, u16 reg, u8 val)
@@ -684,7 +709,9 @@ static int ar0144_probe(struct i2c_client *client,
 {
 	struct device *dev = &client->dev;
 	struct device_node *endpoint;
+	const struct ar0144_mode *mode = &supported_modes[0];
 	struct ar0144 *ar0144;
+	s64 pixel_rate, h_blank, v_blank;
 	int ret;
 
 	ret = ar0144_fpd_link_init(client);
@@ -698,6 +725,8 @@ static int ar0144_probe(struct i2c_client *client,
 	ar0144->i2c_client = client;
 	ar0144->dev = dev;
 	mutex_init(&ar0144->lock);
+
+	ar0144->cur_mode = &supported_modes[0];
 
 	endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
 	if (!endpoint) {
@@ -739,6 +768,20 @@ static int ar0144_probe(struct i2c_client *client,
 		ret = ar0144->ctrls.error;
 		goto free_ctrls;
 	}
+
+	/* pixel rate */
+	pixel_rate = mode->vts_def * mode->hts_def * mode->max_fps;
+	ar0144->pixel_rate =
+	    v4l2_ctrl_new_std(&ar0144->ctrls, NULL, V4L2_CID_PIXEL_RATE, 0, pixel_rate,
+			      1, pixel_rate);	
+
+	/* blank */
+	h_blank = mode->hts_def - mode->width;
+	ar0144->hblank = v4l2_ctrl_new_std(&ar0144->ctrls, NULL, V4L2_CID_HBLANK,
+					   h_blank, h_blank, 1, h_blank);
+	v_blank = mode->vts_def - mode->height;
+	ar0144->vblank = v4l2_ctrl_new_std(&ar0144->ctrls, NULL, V4L2_CID_VBLANK,
+					   v_blank, v_blank, 1, v_blank);	
 
     v4l2_ctrl_new_std_menu(&ar0144->ctrls, &ar0144_ctrl_ops,
               V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL, 0, V4L2_EXPOSURE_AUTO);
