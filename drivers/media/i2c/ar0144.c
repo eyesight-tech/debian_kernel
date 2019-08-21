@@ -34,6 +34,8 @@
 #define AR0144_R3144_AE_ROI_X_SIZE              0x3144
 #define AR0144_R3146_AE_ROI_Y_SIZE              0x3146
 
+#define AR0144_EXPOSURE_DEFAULT			0x0160
+
 #define AR0144_I2C_ADDR      0x10
 #define AR0144_ID_REG        0x3000
 #define AR0144_ID_VAL        0x1356
@@ -479,6 +481,7 @@ static void set_ae(struct v4l2_subdev *sd)
 static int ar0144_s_stream(struct v4l2_subdev *subdev, int enable)
 {
 	struct ar0144 *ar0144 = to_ar0144(subdev);
+	struct v4l2_subdev *sd = &ar0144->sd;
 	int ret;
 
 	mutex_lock(&ar0144->lock);
@@ -527,6 +530,7 @@ static int ar0144_s_stream(struct v4l2_subdev *subdev, int enable)
     set_ae(subdev);
     set_gain(subdev);
     set_exposure(subdev);	
+        set_ae_roi(sd);
 
 	ret = ar0144_set_register_array(ar0144, ar0144at_start_stream,
 					ARRAY_SIZE(ar0144at_start_stream));
@@ -540,35 +544,28 @@ static int ar0144_s_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct ar0144 *core =
 		container_of(ctrl->handler, struct ar0144, ctrls);
-	struct v4l2_subdev *sd = &core->sd;
 
  	switch (ctrl->id) {
     case V4L2_CID_EXPOSURE_AUTO:
         core->ae = (ctrl->val == V4L2_EXPOSURE_AUTO) ? 1 : 0;
-        set_ae(sd);
         break;
 	case V4L2_CID_GAIN:
 		core->global_gain = ctrl->val;
-		set_gain(sd);
 		break;
 	case V4L2_CID_EXPOSURE:
 		core->exposure = ctrl->val;
-		set_exposure(sd);
 		break;
 	case V4L2_CID_HFLIP:
 		core->hflip = ctrl->val;
-		set_read_mode(sd);
 		return 0;
 	case V4L2_CID_VFLIP:
 		core->vflip = ctrl->val;
-		set_read_mode(sd);
 		return 0;
     case AR0144_CID_AE_ROI:
         core->ae_roi_x_start_offset = ctrl->p_cur.p_u16[0];
         core->ae_roi_y_start_offset = ctrl->p_cur.p_u16[1];
         core->ae_roi_x_size = ctrl->p_cur.p_u16[2];
         core->ae_roi_y_size = ctrl->p_cur.p_u16[3];
-        set_ae_roi(sd);
         return 0;		
 	default:
 		return -EINVAL;
@@ -745,7 +742,8 @@ static int ar0144_probe(struct i2c_client *client,
 	v4l2_ctrl_new_std(&ar0144->ctrls, &ar0144_ctrl_ops,
 			  V4L2_CID_GAIN, 0, 0x40, 1, 0x0E);
 	v4l2_ctrl_new_std(&ar0144->ctrls, &ar0144_ctrl_ops,
-			  V4L2_CID_EXPOSURE, 0, 0x01CF, 1, 0x0160);
+			  V4L2_CID_EXPOSURE, 0, 0x01CF, 1, AR0144_EXPOSURE_DEFAULT);
+	ar0144->exposure = AR0144_EXPOSURE_DEFAULT;
 	v4l2_ctrl_new_std(&ar0144->ctrls, &ar0144_ctrl_ops,
 			  V4L2_CID_HFLIP, 0, 1, 1, 0);
 	v4l2_ctrl_new_std(&ar0144->ctrls, &ar0144_ctrl_ops,
