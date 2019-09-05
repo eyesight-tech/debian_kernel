@@ -544,6 +544,7 @@ static int ar0144_s_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct ar0144 *core =
 		container_of(ctrl->handler, struct ar0144, ctrls);
+	struct v4l2_subdev *sd = &core->sd;
 
  	switch (ctrl->id) {
     case V4L2_CID_EXPOSURE_AUTO:
@@ -566,6 +567,7 @@ static int ar0144_s_ctrl(struct v4l2_ctrl *ctrl)
         core->ae_roi_y_start_offset = ctrl->p_cur.p_u16[1];
         core->ae_roi_x_size = ctrl->p_cur.p_u16[2];
         core->ae_roi_y_size = ctrl->p_cur.p_u16[3];
+        set_ae_roi(sd);
         return 0;		
 	default:
 		return -EINVAL;
@@ -695,6 +697,14 @@ static int ar0144_probe(struct i2c_client *client,
 	ar0144->i2c_client = client;
 	ar0144->dev = dev;
 	mutex_init(&ar0144->lock);
+
+	// default values //
+	ar0144->ae = 1;
+	ar0144->ae_roi_x_start_offset = 0;
+	ar0144->ae_roi_y_start_offset = 0;
+	ar0144->ae_roi_x_size = 1280;
+	ar0144->ae_roi_y_size = 800;		
+
 
 	endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
 	if (!endpoint) {
