@@ -60,6 +60,8 @@ struct ar0144 {
 	struct v4l2_ctrl_handler ctrls;
 	struct v4l2_ctrl *link_freq;
 
+	bool isAbba2;
+
 	unsigned hflip:1;
 	unsigned vflip:1;
 	unsigned ae:1;
@@ -165,6 +167,20 @@ static const struct ar0144_reg_value ar0144at_auto_exposure[] = {
 	{0x310C, 0x1008}, // AE_DAMP_OFFSET_REG
 	{0x310E, 0x1010}, // AE_DAMP_GAIN_REG
 	{0x3110, 0x0048}, // AE_DAMP_MAX_REG
+};
+
+static const struct ar0144_reg_value ar0144at_auto_exposure_abba2[] = {
+	{0x3270, 0x0100}, // LED_FLASH_EN = 1
+	{0x3100, 0x0007}, // AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain enabled
+	{0x311C, 0x0046}, // AE_MAX_EXPOSURE (in rows)
+	{0x311C, 0x0160},
+	{0x3102, 0x5650}, // AE_LUMA_TARGET
+	{0x3108, 0x0008}, // AE_MIN_EV_STEP_REG
+	{0x310A, 0x0902}, // AE_MAX_EV_STEP_REG
+	{0x310C, 0x1008}, // AE_DAMP_OFFSET_REG
+	{0x310E, 0x1010}, // AE_DAMP_GAIN_REG
+	{0x3110, 0x0048}, // AE_DAMP_MAX_REG
+	{0x3166, 0x0046}, // AE_AG_EXPOSURE_HIGH
 };
 
 static const struct ar0144_reg_value ar0144at_start_stream[] = {
@@ -521,8 +537,17 @@ static int ar0144_s_stream(struct v4l2_subdev *subdev, int enable)
 	if (ret < 0)
 		goto out;
 
-	ret = ar0144_set_register_array(ar0144, ar0144at_auto_exposure,
-					ARRAY_SIZE(ar0144at_auto_exposure));
+	if (ar0144->isAbba2)
+	{
+		ret = ar0144_set_register_array(ar0144, ar0144at_auto_exposure_abba2,
+						ARRAY_SIZE(ar0144at_auto_exposure_abba2));
+	}
+	else
+	{
+		ret = ar0144_set_register_array(ar0144, ar0144at_auto_exposure,
+						ARRAY_SIZE(ar0144at_auto_exposure));
+	}
+
 	if (ret < 0)
 		goto out;
 
@@ -619,7 +644,9 @@ struct ar0144_fdp_link_init_t {
 	u8 id;
 	u8 addr;
 	u8 val;
-} ar0144_fdp_link_init_arr[] = {
+}; 
+
+struct ar0144_fdp_link_init_t ar0144_fdp_link_init_arr[] = {
 	{0x3d, 0x4C, 0x01},
 	{0x3d, 0x20, 0x20},
 	{0x3d, 0x33, 0x23},
@@ -678,6 +705,32 @@ static int ar0144_fpd_link_init(struct i2c_client *ar0144_i2c_client)
 	return 0;
 }
 
+static bool ar0144_is_camera_abba2(struct i2c_client *ar0144_i2c_client)
+{
+	struct i2c_msg msg;
+	u8 buf[2];
+	int ret;
+
+	u8 uc_i2c_addr = 0x08;
+	u8 uc_reg_addr = 0x88;
+	u8 uc_reg_val  = 0x00;
+
+	msg.addr = uc_i2c_addr;
+	msg.flags = 0;
+	msg.len = 2;
+	buf[0] = uc_reg_addr;
+	buf[1] = uc_reg_val;
+	msg.buf = buf;
+
+
+	ret = i2c_transfer(ar0144_i2c_client->adapter, &msg, 1);
+	if (ret < 0)
+		return false;
+	else
+		return true;	
+
+}
+
 static int ar0144_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
@@ -688,7 +741,7 @@ static int ar0144_probe(struct i2c_client *client,
 
 	ret = ar0144_fpd_link_init(client);
 	if (ret < 0)
-		return ret;
+		return ret;	
 
 	ar0144 = devm_kzalloc(dev, sizeof(struct ar0144), GFP_KERNEL);
 	if (!ar0144)
@@ -697,6 +750,16 @@ static int ar0144_probe(struct i2c_client *client,
 	ar0144->i2c_client = client;
 	ar0144->dev = dev;
 	mutex_init(&ar0144->lock);
+
+	ar0144->isAbba2 = ar0144_is_camera_abba2(client);
+	if (ar0144->isAbba2)
+	{
+		dev_info(dev, "Detected ABBA2 version of camera\n");
+	}
+	else
+	{
+		dev_info(dev, "Detected ABBA1 version of camera\n");
+	}
 
 	// default values //
 	ar0144->ae = 1;
