@@ -177,7 +177,7 @@ static const struct ar0144_reg_value ar0144at_auto_exposure_abba2[] = {
 	{0x310A, 0x0902}, // AE_MAX_EV_STEP_REG
 	{0x310C, 0x1008}, // AE_DAMP_OFFSET_REG
 	{0x310E, 0x1010}, // AE_DAMP_GAIN_REG
-	{0x3110, 0x0048}, // AE_DAMP_MAX_REG
+	{0x3110, 0x0060}, // AE_DAMP_MAX_REG
 	{0x3166, 0x0046}, // AE_AG_EXPOSURE_HIGH
 };
 
