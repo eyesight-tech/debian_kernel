@@ -559,7 +559,7 @@
 		};
 	};
 
-	camera-sensor@10 {
+	/*camera-sensor@10 {
 		compatible = "onnn,ar0144";
 		reg = <0x10>;
 		clocks = <&ext_cam_clk>;
@@ -567,6 +567,20 @@
 
 		port {
 			ar0144_out: endpoint {
+				remote-endpoint = <&mipi_dphy_in>;
+				data-lanes = <1 2>;
+			};
+		};
+	};*/
+
+	camera-sensor@10 {
+		compatible = "onnn,ar0135";
+		reg = <0x10>;
+		clocks = <&ext_cam_clk>;
+		status = "okay";
+
+		port {
+			ar0135_out: endpoint {
 				remote-endpoint = <&mipi_dphy_in>;
 				data-lanes = <1 2>;
 			};
@@ -611,7 +625,7 @@
 &isp_mmu {
 	status = "okay";
 };
-
+/*
 &mipi_phy_rx0 {
 	status = "okay";
 
@@ -637,7 +651,32 @@
 		};
 	};
 };
+*/
+&mipi_phy_rx0 {
+	status = "okay";
 
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+
+			mipi_dphy_in: endpoint {
+				remote-endpoint = <&ar0135_out>;
+				data-lanes = <1 2>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+
+			dphy_rx0_out: endpoint {
+				remote-endpoint = <&isp_mipi_in>;
+			};
+		};
+	};
+};
 
 &spi0 {
 	status = "okay";
