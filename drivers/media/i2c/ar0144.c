@@ -21,6 +21,21 @@
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-subdev.h>
 
+#define AR0144_CID_CUSTOM_BASE  (V4L2_CID_USER_BASE | 0xf000)
+#define AR0144_CID_AE_ROI       (AR0144_CID_CUSTOM_BASE + 0)
+
+#define AR0144_R3012_COARSE_INTEGRATION_TIME    0x3012
+#define AR0144_R301D_IMAGE_ORIENTATION          0x301D
+#define AR0144_R3040_READ_MODE                  0x3040
+#define AR0144_R3060_ANALOG_GAIN                0x3060
+#define AR0144_R3100_AECTRLREG                  0x3100
+#define AR0144_R3140_AE_ROI_X_START_OFFSET      0x3140
+#define AR0144_R3142_AE_ROI_Y_START_OFFSET      0x3142
+#define AR0144_R3144_AE_ROI_X_SIZE              0x3144
+#define AR0144_R3146_AE_ROI_Y_SIZE              0x3146
+
+#define AR0144_EXPOSURE_DEFAULT			0x0160
+
 #define AR0144_I2C_ADDR      0x10
 #define AR0144_ID_REG        0x3000
 #define AR0144_ID_VAL        0x1356
@@ -44,6 +59,19 @@ struct ar0144 {
 
 	struct v4l2_ctrl_handler ctrls;
 	struct v4l2_ctrl *link_freq;
+
+	bool isAbba2;
+
+	unsigned hflip:1;
+	unsigned vflip:1;
+	unsigned ae:1;
+	u16 global_gain;
+	u16 exposure;
+
+	u16 ae_roi_x_start_offset;
+	u16 ae_roi_y_start_offset;
+	u16 ae_roi_x_size;
+	u16 ae_roi_y_size;	
 
 	bool streaming;
 };
@@ -129,16 +157,28 @@ static const struct ar0144_reg_value ar0144at_embedded_data_stats[] = {
 };
 
 static const struct ar0144_reg_value ar0144at_auto_exposure[] = {
-	{0x3270, 0x0100},
-	{0x3100, 0x0003},
-	{0x311C, 0x0160},
-	{0x311C, 0x0160},
-	{0x3102, 0x5650},
-	{0x3108, 0x0008},
-	{0x310A, 0x0902},
-	{0x310C, 0x1008},
-	{0x310E, 0x1010},
-	{0x3110, 0x0048},
+	{0x3270, 0x0100}, // LED_FLASH_EN = 1
+	{0x3100, 0x0003}, // AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain disabled
+	{0x311C, 0x0160}, // AE_MAX_EXPOSURE (in rows)
+	{0x3102, 0x5650}, // AE_LUMA_TARGET
+	{0x3108, 0x0008}, // AE_MIN_EV_STEP_REG
+	{0x310A, 0x0902}, // AE_MAX_EV_STEP_REG
+	{0x310C, 0x1008}, // AE_DAMP_OFFSET_REG
+	{0x310E, 0x1010}, // AE_DAMP_GAIN_REG
+	{0x3110, 0x0048}, // AE_DAMP_MAX_REG
+};
+
+static const struct ar0144_reg_value ar0144at_auto_exposure_abba2[] = {
+	{0x3270, 0x0100}, // LED_FLASH_EN = 1
+	{0x3100, 0x0007}, // AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain enabled
+	{0x311C, 0x0046}, // AE_MAX_EXPOSURE (in rows)
+	{0x3102, 0x5650}, // AE_LUMA_TARGET
+	{0x3108, 0x0008}, // AE_MIN_EV_STEP_REG
+	{0x310A, 0x0902}, // AE_MAX_EV_STEP_REG
+	{0x310C, 0x1008}, // AE_DAMP_OFFSET_REG
+	{0x310E, 0x1010}, // AE_DAMP_GAIN_REG
+	{0x3110, 0x0060}, // AE_DAMP_MAX_REG
+	{0x3166, 0x0046}, // AE_AG_EXPOSURE_HIGH
 };
 
 static const struct ar0144_reg_value ar0144at_start_stream[] = {
@@ -154,6 +194,24 @@ static const struct ar0144_reg_value ar0144at_stop_stream[] = {
 static const s64 ar0144_link_freq[] = {
 	768000000,
 };
+
+static int ar0144_write_reg8(struct ar0144 *ar0144, u16 reg, u8 val)
+{
+    u8 regbuf[3];
+    int ret;
+
+    regbuf[0] = reg >> 8;
+    regbuf[1] = reg & 0xff;
+    regbuf[2] = val;
+
+     ret = i2c_master_send(ar0144->i2c_client, regbuf, 3);
+    if (ret < 0)
+        dev_err(&ar0144->i2c_client->dev,
+            "%s: write reg error %d: reg=%x, val=%x\n",
+            __func__, ret, reg, val);
+
+     return ret;
+}
 
 static int ar0144_write_reg(struct ar0144 *ar0144, u16 reg, u16 val)
 {
@@ -385,9 +443,59 @@ static int ar0144_get_selection(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static void set_read_mode(struct v4l2_subdev *sd)
+{
+    struct ar0144 *core = to_ar0144(sd);
+    u8 mode = 0x00;
+
+    if (core->hflip)
+        mode |= 0x01;
+
+    if (core->vflip)
+        mode |= 0x02;
+
+    ar0144_write_reg8(core, AR0144_R301D_IMAGE_ORIENTATION, mode);
+}
+
+static void set_ae(struct v4l2_subdev *sd)
+{
+    struct ar0144 *core = to_ar0144(sd);
+    u16 val = 0x00;
+
+    if (core->ae)
+        val = 0x03;
+
+    ar0144_write_reg(core, AR0144_R3100_AECTRLREG, val);
+}
+
+ static void set_gain(struct v4l2_subdev *sd)
+{
+    struct ar0144 *core = to_ar0144(sd);
+
+    ar0144_write_reg(core, AR0144_R3060_ANALOG_GAIN, core->global_gain);
+}
+
+ static void set_exposure(struct v4l2_subdev *sd)
+{
+    struct ar0144 *core = to_ar0144(sd);
+
+    ar0144_write_reg(core, AR0144_R3012_COARSE_INTEGRATION_TIME, core->exposure);
+}
+
+ static void set_ae_roi(struct v4l2_subdev *sd)
+{
+    struct ar0144 *core = to_ar0144(sd);
+
+    ar0144_write_reg(core, AR0144_R3140_AE_ROI_X_START_OFFSET , core->ae_roi_x_start_offset);
+    ar0144_write_reg(core, AR0144_R3142_AE_ROI_Y_START_OFFSET, core->ae_roi_y_start_offset);
+    ar0144_write_reg(core, AR0144_R3144_AE_ROI_X_SIZE, core->ae_roi_x_size);
+    ar0144_write_reg(core, AR0144_R3146_AE_ROI_Y_SIZE, core->ae_roi_y_size);
+}
+
 static int ar0144_s_stream(struct v4l2_subdev *subdev, int enable)
 {
 	struct ar0144 *ar0144 = to_ar0144(subdev);
+	struct v4l2_subdev *sd = &ar0144->sd;
 	int ret;
 
 	mutex_lock(&ar0144->lock);
@@ -415,11 +523,11 @@ static int ar0144_s_stream(struct v4l2_subdev *subdev, int enable)
 	if (ret < 0)
 		goto out;
 
-	ret = ar0144_set_register_array(
-		ar0144, ar0144at_context_b_2x2_binning,
-		ARRAY_SIZE(ar0144at_context_b_2x2_binning));
-	if (ret < 0)
-		goto out;
+	// ret = ar0144_set_register_array(
+	// 	ar0144, ar0144at_context_b_2x2_binning,
+	// 	ARRAY_SIZE(ar0144at_context_b_2x2_binning));
+	// if (ret < 0)
+	// 	goto out;
 
 	ret = ar0144_set_register_array(
 		ar0144, ar0144at_embedded_data_stats,
@@ -427,10 +535,25 @@ static int ar0144_s_stream(struct v4l2_subdev *subdev, int enable)
 	if (ret < 0)
 		goto out;
 
-	ret = ar0144_set_register_array(ar0144, ar0144at_auto_exposure,
-					ARRAY_SIZE(ar0144at_auto_exposure));
+	if (ar0144->isAbba2)
+	{
+		ret = ar0144_set_register_array(ar0144, ar0144at_auto_exposure_abba2,
+						ARRAY_SIZE(ar0144at_auto_exposure_abba2));
+	}
+	else
+	{
+		ret = ar0144_set_register_array(ar0144, ar0144at_auto_exposure,
+						ARRAY_SIZE(ar0144at_auto_exposure));
+	}
+
 	if (ret < 0)
 		goto out;
+
+	set_read_mode(subdev);
+    set_ae(subdev);
+    set_gain(subdev);
+    set_exposure(subdev);	
+        set_ae_roi(sd);
 
 	ret = ar0144_set_register_array(ar0144, ar0144at_start_stream,
 					ARRAY_SIZE(ar0144at_start_stream));
@@ -439,6 +562,58 @@ out:
 	mutex_unlock(&ar0144->lock);
 	return ret;
 }
+
+static int ar0144_s_ctrl(struct v4l2_ctrl *ctrl)
+{
+	struct ar0144 *core =
+		container_of(ctrl->handler, struct ar0144, ctrls);
+	struct v4l2_subdev *sd = &core->sd;
+
+ 	switch (ctrl->id) {
+    case V4L2_CID_EXPOSURE_AUTO:
+        core->ae = (ctrl->val == V4L2_EXPOSURE_AUTO) ? 1 : 0;
+        break;
+	case V4L2_CID_GAIN:
+		core->global_gain = ctrl->val;
+		break;
+	case V4L2_CID_EXPOSURE:
+		core->exposure = ctrl->val;
+		break;
+	case V4L2_CID_HFLIP:
+		core->hflip = ctrl->val;
+		return 0;
+	case V4L2_CID_VFLIP:
+		core->vflip = ctrl->val;
+		return 0;
+    case AR0144_CID_AE_ROI:
+        core->ae_roi_x_start_offset = ctrl->p_cur.p_u16[0];
+        core->ae_roi_y_start_offset = ctrl->p_cur.p_u16[1];
+        core->ae_roi_x_size = ctrl->p_cur.p_u16[2];
+        core->ae_roi_y_size = ctrl->p_cur.p_u16[3];
+        set_ae_roi(sd);
+        return 0;		
+	default:
+		return -EINVAL;
+	}
+
+ 	return 0;
+}
+
+static const struct v4l2_ctrl_ops ar0144_ctrl_ops = {
+	.s_ctrl = ar0144_s_ctrl,
+};
+
+static const struct v4l2_ctrl_config ar0144_ae_roi = {
+    .ops = &ar0144_ctrl_ops,
+    .id = AR0144_CID_AE_ROI,
+    .name = "AR0144 AE ROI",
+    .type = V4L2_CTRL_TYPE_U16,
+    .def = 0x0,
+    .min = 0x0,
+    .max = 0x1280,
+    .step = 1,
+    .dims = { 4 },
+};
 
 static const struct v4l2_subdev_core_ops ar0144_core_ops = {
 	.s_power = ar0144_s_power,
@@ -467,7 +642,9 @@ struct ar0144_fdp_link_init_t {
 	u8 id;
 	u8 addr;
 	u8 val;
-} ar0144_fdp_link_init_arr[] = {
+}; 
+
+struct ar0144_fdp_link_init_t ar0144_fdp_link_init_arr[] = {
 	{0x3d, 0x4C, 0x01},
 	{0x3d, 0x20, 0x20},
 	{0x3d, 0x33, 0x23},
@@ -526,6 +703,32 @@ static int ar0144_fpd_link_init(struct i2c_client *ar0144_i2c_client)
 	return 0;
 }
 
+static bool ar0144_is_camera_abba2(struct i2c_client *ar0144_i2c_client)
+{
+	struct i2c_msg msg;
+	u8 buf[2];
+	int ret;
+
+	u8 uc_i2c_addr = 0x08;
+	u8 uc_reg_addr = 0x88;
+	u8 uc_reg_val  = 0x00;
+
+	msg.addr = uc_i2c_addr;
+	msg.flags = 0;
+	msg.len = 2;
+	buf[0] = uc_reg_addr;
+	buf[1] = uc_reg_val;
+	msg.buf = buf;
+
+
+	ret = i2c_transfer(ar0144_i2c_client->adapter, &msg, 1);
+	if (ret < 0)
+		return false;
+	else
+		return true;	
+
+}
+
 static int ar0144_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
@@ -536,7 +739,7 @@ static int ar0144_probe(struct i2c_client *client,
 
 	ret = ar0144_fpd_link_init(client);
 	if (ret < 0)
-		return ret;
+		return ret;	
 
 	ar0144 = devm_kzalloc(dev, sizeof(struct ar0144), GFP_KERNEL);
 	if (!ar0144)
@@ -545,6 +748,24 @@ static int ar0144_probe(struct i2c_client *client,
 	ar0144->i2c_client = client;
 	ar0144->dev = dev;
 	mutex_init(&ar0144->lock);
+
+	ar0144->isAbba2 = ar0144_is_camera_abba2(client);
+	if (ar0144->isAbba2)
+	{
+		dev_info(dev, "Detected ABBA2 version of camera\n");
+	}
+	else
+	{
+		dev_info(dev, "Detected ABBA1 version of camera\n");
+	}
+
+	// default values //
+	ar0144->ae = 1;
+	ar0144->ae_roi_x_start_offset = 0;
+	ar0144->ae_roi_y_start_offset = 0;
+	ar0144->ae_roi_x_size = 1280;
+	ar0144->ae_roi_y_size = 800;		
+
 
 	endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
 	if (!endpoint) {
@@ -577,8 +798,8 @@ static int ar0144_probe(struct i2c_client *client,
 
 	v4l2_ctrl_handler_init(&ar0144->ctrls, 1);
 	ar0144->link_freq = v4l2_ctrl_new_int_menu(&ar0144->ctrls, NULL,
-						   V4L2_CID_LINK_FREQ, 0, 0,
-						   ar0144_link_freq);
+						   V4L2_CID_LINK_FREQ, 0, 0, ar0144_link_freq);
+
 	if (ar0144->link_freq)
 		ar0144->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 	if (ar0144->ctrls.error) {
@@ -586,6 +807,20 @@ static int ar0144_probe(struct i2c_client *client,
 		ret = ar0144->ctrls.error;
 		goto free_ctrls;
 	}
+
+    v4l2_ctrl_new_std_menu(&ar0144->ctrls, &ar0144_ctrl_ops,
+              V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL, 0, V4L2_EXPOSURE_AUTO);
+	v4l2_ctrl_new_std(&ar0144->ctrls, &ar0144_ctrl_ops,
+			  V4L2_CID_GAIN, 0, 0x40, 1, 0x0E);
+	v4l2_ctrl_new_std(&ar0144->ctrls, &ar0144_ctrl_ops,
+			  V4L2_CID_EXPOSURE, 0, 0x01CF, 1, AR0144_EXPOSURE_DEFAULT);
+	ar0144->exposure = AR0144_EXPOSURE_DEFAULT;
+	v4l2_ctrl_new_std(&ar0144->ctrls, &ar0144_ctrl_ops,
+			  V4L2_CID_HFLIP, 0, 1, 1, 0);
+	v4l2_ctrl_new_std(&ar0144->ctrls, &ar0144_ctrl_ops,
+			  V4L2_CID_VFLIP, 0, 1, 1, 0);
+	v4l2_ctrl_new_custom(&ar0144->ctrls, &ar0144_ae_roi, NULL);
+
 	ar0144->sd.ctrl_handler = &ar0144->ctrls;
 
 	v4l2_i2c_subdev_init(&ar0144->sd, client, &ar0144_subdev_ops);

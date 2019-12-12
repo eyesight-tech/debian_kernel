@@ -1111,7 +1111,7 @@ void rkisp1_unregister_isp_subdev(struct rkisp1_device *isp_dev)
 
 void rkisp1_mipi_isr(unsigned int mis, struct rkisp1_device *dev)
 {
-	struct v4l2_device *v4l2_dev = &dev->v4l2_dev;
+	//struct v4l2_device *v4l2_dev = &dev->v4l2_dev;
 	void __iomem *base = dev->base_addr;
 	u32 val;
 
@@ -1144,9 +1144,9 @@ void rkisp1_mipi_isr(unsigned int mis, struct rkisp1_device *dev)
 			writel(val, base + CIF_MIPI_IMSC);
 			dev->isp_sdev.dphy_errctrl_disabled = false;
 		}
-	} else {
+	}/* else {
 		v4l2_warn(v4l2_dev, "MIPI mis error: 0x%08x\n", mis);
-	}
+	}*/
 }
 
 void rkisp1_isp_isr(unsigned int isp_mis, struct rkisp1_device *dev)
