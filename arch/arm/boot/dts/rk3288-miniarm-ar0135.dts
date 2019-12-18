@@ -563,7 +563,7 @@
 		compatible = "onnn,ar0144";
 		reg = <0x10>;
 		clocks = <&ext_cam_clk>;
-		status = "okay";
+		status = "disabled";
 
 		port {
 			ar0144_out: endpoint {
@@ -577,7 +577,7 @@
 		compatible = "onnn,ar0135";
 		reg = <0x10>;
 		clocks = <&ext_cam_clk>;
-		status = "disabled";
+		status = "okay";
 
 		port {
 			ar0135_out: endpoint {
@@ -637,8 +637,8 @@
 			reg = <0>;
 
 			mipi_dphy_in: endpoint {
-				remote-endpoint = <&ar0144_out>;
-				/* remote-endpoint = <&ar0135_out>; */
+				/*remote-endpoint = <&ar0144_out>;*/
+				remote-endpoint = <&ar0135_out>;
 				data-lanes = <1 2>;
 			};
 		};
