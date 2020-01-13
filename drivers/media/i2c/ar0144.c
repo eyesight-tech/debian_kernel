@@ -752,11 +752,11 @@ static int ar0144_probe(struct i2c_client *client,
 	ar0144->isAbba2 = ar0144_is_camera_abba2(client);
 	if (ar0144->isAbba2)
 	{
-		dev_info(dev, "Detected ABBA2 version of camera\n");
+		dev_info(dev, "EYESIGHT Camera detected : JABIL ABB2\n");
 	}
 	else
 	{
-		dev_info(dev, "Detected ABBA1 version of camera\n");
+		dev_info(dev, "EYESIGHT Camera detected : JABIL ABB1\n");
 	}
 
 	// default values //
