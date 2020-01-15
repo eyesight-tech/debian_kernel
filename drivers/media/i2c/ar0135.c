@@ -110,15 +110,21 @@ static const struct ar0135_reg_value AR0135at_embedded_data_stats[] = {
 };
 
 static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
+	{0x3046, 0x0100}, // LED_FLASH_EN = 1 -->should sleep for 500ms?
+	{0x311C, 0x0245}, // AE_MAX_EXPOSURE (in rows)
+	{0x310A, 0x0902}, // AE_MAX_EV_STEP_REG
+	{0x310C, 0x1188}, // AE_DAMP_OFFSET_REG
+	{0x310E, 0x0490}, // AE_DAMP_GAIN_REG
+	{0x3110, 0x00C8}, // AE_DAMP_MAX_REG
+	{0x3166, 0x0342}, // AE_AG_EXPOSURE_HI
+	{0x3168, 0x0300}, // AE_AG_EXPOSURE_LO
+	//{0x3040, 0x4000}, // READ_MODE
+	//{0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
+	{0x310E, 0x00C8}, // DATA_PEDESTAL
+	{0x306E, 0x9010}, // DATAPATH_SELECT
+	{0x3102, 0x0650}, // AE_LUMA_TARGET
+	//{0x30B0, 0x0080}, // DIGITAL_TEST
 	{0x3100, 0x0003}, // AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain enabled 
-	{0x311C, 0x0342}, // AE_MAX_EXPOSURE (in rows)
-	{0x3102, 0x0500}, // AE_LUMA_TARGET
-	{0x3108, 0x0001}, // AE_MIN_EV_STEP_REG
-	{0x310A, 0x0100}, // AE_MAX_EV_STEP_REG
-	{0x310C, 0x0100}, // AE_DAMP_OFFSET_REG
-	{0x310E, 0x0100}, // AE_DAMP_GAIN_REG
-	{0x3110, 0x00E0}, // AE_DAMP_MAX_REG
-	{0x3046, 0x0100}, // LED_FLASH_EN = 1	
 };
 
 static const struct ar0135_reg_value AR0135at_start_stream[] = {
@@ -164,7 +170,7 @@ static int ar0135_read_reg(struct AR0135 *ar0135, u16 reg, u16 *val)
 	ret = i2c_master_send(ar0135->i2c_client, buf, 2);
 	if (ret < 0) {
 		dev_err(&ar0135->i2c_client->dev,
-			"%s: write reg error %d: reg=%x\n",
+			"%s: write reg error %d: reg=0x%x\n",
 			__func__, ret, reg);
 		return ret;
 	}
@@ -172,7 +178,7 @@ static int ar0135_read_reg(struct AR0135 *ar0135, u16 reg, u16 *val)
 	ret = i2c_master_recv(ar0135->i2c_client, buf, 2);
 	if (ret < 0) {
 		dev_err(&ar0135->i2c_client->dev,
-			"%s: read reg error %d: reg=%x\n",
+			"%s: read reg error %d: reg=0x%x\n",
 			__func__, ret, reg);
 		return ret;
 	}
@@ -449,9 +455,15 @@ static int ar0135_s_stream(struct v4l2_subdev *subdev, int enable)
 					ARRAY_SIZE(AR0135at_embedded_data_stats));
 	if (ret < 0)
 		goto out;
-
+#if 1 
+    printk(KERN_ALERT "-------->ar0135_s_stream setting auto exposure no gain\n");
 	ret = ar0135_set_register_array(ar0135, AR0135at_auto_exposure,
 					ARRAY_SIZE(AR0135at_auto_exposure));
+#else
+    printk(KERN_ALERT "-------->ar0135_s_stream NO auto exposure - open LEDs\n");   
+    ar0135_write_reg(ar0135, 0x3046, 0x0100);
+#endif
+
 
 	if (ret < 0)
 		goto out;
@@ -658,7 +670,10 @@ static int ar0135_probe(struct i2c_client *client,
 	printk(KERN_ALERT "--------> AR0135_probe\n");
 	ret = ar0135_fpd_link_init(client);
 	if (ret < 0)
+	{
+		printk(KERN_ALERT "EYESIGHT Camera Primax AR135 NOT detected\n");
 		return ret;	
+	}
 
 	ar0135 = devm_kzalloc(dev, sizeof(struct AR0135), GFP_KERNEL);
 	if (!ar0135)
@@ -668,7 +683,7 @@ static int ar0135_probe(struct i2c_client *client,
 	ar0135->dev = dev;
 	mutex_init(&ar0135->lock);
 
-	dev_info(dev, "Detected Primax AR135 version of camera\n");
+	dev_info(dev, "EYESIGHT Camera detected : Primax AR135\n");
 
 	// default values //
 	ar0135->ae = 1;

@@ -737,9 +737,13 @@ static int ar0144_probe(struct i2c_client *client,
 	struct ar0144 *ar0144;
 	int ret;
 
+	printk(KERN_ALERT "--------> AR0144_probe\n");
 	ret = ar0144_fpd_link_init(client);
 	if (ret < 0)
+	{
+		printk(KERN_ALERT "EYESIGHT Camera Primax AR0144 NOT detected\n");
 		return ret;	
+	}
 
 	ar0144 = devm_kzalloc(dev, sizeof(struct ar0144), GFP_KERNEL);
 	if (!ar0144)
@@ -752,11 +756,11 @@ static int ar0144_probe(struct i2c_client *client,
 	ar0144->isAbba2 = ar0144_is_camera_abba2(client);
 	if (ar0144->isAbba2)
 	{
-		dev_info(dev, "Detected ABBA2 version of camera\n");
+		dev_info(dev, "EYESIGHT Camera detected : JABIL ABB2\n");
 	}
 	else
 	{
-		dev_info(dev, "Detected ABBA1 version of camera\n");
+		dev_info(dev, "EYESIGHT Camera detected : JABIL ABB1\n");
 	}
 
 	// default values //
