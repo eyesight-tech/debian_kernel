@@ -111,19 +111,17 @@ static const struct ar0135_reg_value AR0135at_embedded_data_stats[] = {
 
 static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
 	{0x3046, 0x0100}, // LED_FLASH_EN = 1 -->should sleep for 500ms?
-	{0x311C, 0x0245}, // AE_MAX_EXPOSURE (in rows)
-	{0x310A, 0x0902}, // AE_MAX_EV_STEP_REG
-	{0x310C, 0x1188}, // AE_DAMP_OFFSET_REG
-	{0x310E, 0x0490}, // AE_DAMP_GAIN_REG
-	{0x3110, 0x00C8}, // AE_DAMP_MAX_REG
+	{0x311C, 0x0342}, // AE_MAX_EXPOSURE (in rows)
+	{0x310A, 0x0008}, // AE_MAX_EV_STEP_REG
+	{0x310C, 0x0010}, // AE_DAMP_OFFSET_REG
+	{0x310E, 0x0200}, // AE_DAMP_GAIN_REG
+	{0x3110, 0x140},  // AE_DAMP_MAX_REG
 	{0x3166, 0x0342}, // AE_AG_EXPOSURE_HI
-	{0x3168, 0x0300}, // AE_AG_EXPOSURE_LO
-	//{0x3040, 0x4000}, // READ_MODE
-	//{0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
-	{0x310E, 0x00C8}, // DATA_PEDESTAL
+	{0x3168, 0x01A3}, // AE_AG_EXPOSURE_LO
+	{0x3040, 0x4000}, // READ_MODE
+    {0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
 	{0x306E, 0x9010}, // DATAPATH_SELECT
-	{0x3102, 0x0650}, // AE_LUMA_TARGET
-	//{0x30B0, 0x0080}, // DIGITAL_TEST
+	{0x3102, 0x0580}, // AE_LUMA_TARGET
 	{0x3100, 0x0003}, // AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain enabled 
 };
 
@@ -456,7 +454,7 @@ static int ar0135_s_stream(struct v4l2_subdev *subdev, int enable)
 	if (ret < 0)
 		goto out;
 #if 1 
-    printk(KERN_ALERT "-------->ar0135_s_stream setting auto exposure no gain\n");
+    printk(KERN_ALERT "-------->ar0135_s_stream setting auto exposure\n");
 	ret = ar0135_set_register_array(ar0135, AR0135at_auto_exposure,
 					ARRAY_SIZE(AR0135at_auto_exposure));
 #else
