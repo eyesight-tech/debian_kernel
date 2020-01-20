@@ -657,31 +657,61 @@ static int ar0135_fpd_link_init(struct i2c_client *ar0135_i2c_client)
 	return 0;
 }
 
+static int getCameraID(struct AR0135 *ar0135)
+{
+	u16 reg_val = -1;
+	int ret = ar0135_read_reg(ar0135, AR0135_ID_REG, &reg_val);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "----------> AR135 Cannot access ID Register\n");;
+		return -1;
+	}
+	printk(KERN_ALERT "----------> Camera ID : %d\n", reg_val);
+
+	if (reg_val == AR0135_ID_VAL) 
+	{
+		printk(KERN_ALERT "----------> AR135 camera found\n");
+	}
+	return reg_val;
+}
+
 static int ar0135_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
 	struct device *dev = &client->dev;
 	struct device_node *endpoint;
 	struct AR0135 *ar0135;
+	u16 camera_id;
 	int ret;
 
 	printk(KERN_ALERT "--------> AR0135_probe\n");
 	ret = ar0135_fpd_link_init(client);
 	if (ret < 0)
 	{
-		printk(KERN_ALERT "EYESIGHT Camera Primax AR135 NOT detected\n");
+		printk(KERN_ALERT "AR0135: ar0135_fpd_link_init failed\n");
 		return ret;	
 	}
 
 	ar0135 = devm_kzalloc(dev, sizeof(struct AR0135), GFP_KERNEL);
 	if (!ar0135)
+	{
 		return -ENOMEM;
+	}
 
 	ar0135->i2c_client = client;
 	ar0135->dev = dev;
 	mutex_init(&ar0135->lock);
 
-	dev_info(dev, "EYESIGHT Camera detected : Primax AR135\n");
+	camera_id = getCameraID(ar0135);
+	if (camera_id == AR0135_ID_VAL)
+	{
+		printk(KERN_ALERT "EYESIGHT Camera detected PrimaxAR135\n");
+	}
+	else
+	{
+		printk(KERN_ALERT "EYESIGHT primax NOT detected\n");
+		return -EINVAL;
+	}
 
 	// default values //
 	ar0135->ae = 1;
@@ -701,6 +731,7 @@ static int ar0135_probe(struct i2c_client *client,
 					 &ar0135->ep);
 	if (ret < 0) {
 		dev_err(dev, "parsing endpoint node failed\n");
+		return -EINVAL;
 		return ret;
 	}
 

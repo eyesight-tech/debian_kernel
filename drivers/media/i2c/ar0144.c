@@ -729,12 +729,31 @@ static bool ar0144_is_camera_abba2(struct i2c_client *ar0144_i2c_client)
 
 }
 
+static int getCameraID(	struct ar0144 *ar0144)
+{
+	u16 reg_val = -1;
+	int ret = ar0144_read_reg(ar0144, AR0144_ID_REG, &reg_val);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "----------> AR144 Cannot access ID Register\n");;
+		return -1;
+	}
+	printk(KERN_ALERT "----------> Camera ID : %d\n", reg_val);
+
+	if (reg_val == AR0144_ID_VAL) 
+	{
+		printk(KERN_ALERT "----------> AR135 camera found\n");
+	}
+	return reg_val;
+}
+
 static int ar0144_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
 	struct device *dev = &client->dev;
 	struct device_node *endpoint;
 	struct ar0144 *ar0144;
+	u16 camera_id = -1;
 	int ret;
 
 	printk(KERN_ALERT "--------> AR0144_probe\n");
@@ -753,14 +772,22 @@ static int ar0144_probe(struct i2c_client *client,
 	ar0144->dev = dev;
 	mutex_init(&ar0144->lock);
 
+	camera_id = getCameraID(ar0144);
+	if (camera_id != AR0144_ID_VAL)
+	{
+		printk(KERN_ALERT "EYESIGHT Camera Primax AR0144 NOT detected\n");
+		return -EINVAL;
+	}
+
+	dev_info(dev, "EYESIGHT Camera detected : Jabil0144\n");
 	ar0144->isAbba2 = ar0144_is_camera_abba2(client);
 	if (ar0144->isAbba2)
 	{
-		dev_info(dev, "EYESIGHT Camera detected : JABIL ABB2\n");
+		dev_info(dev, "EYESIGHT JABIL Camera type : ABB2\n");
 	}
 	else
 	{
-		dev_info(dev, "EYESIGHT Camera detected : JABIL ABB1\n");
+		dev_info(dev, "EYESIGHT JABIL Camera type : ABB1\n");
 	}
 
 	// default values //
