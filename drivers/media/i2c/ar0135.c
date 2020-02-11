@@ -221,7 +221,6 @@ static int ar0135_s_power(struct v4l2_subdev *sd, int on)
 	u16 reg_val;
 	int ret = 0;
 
-	printk(KERN_ALERT "-------->ar0135_s_power start");
 	if (!on)
 		return 0;
 
@@ -431,8 +430,6 @@ static int ar0135_s_stream(struct v4l2_subdev *subdev, int enable)
 	struct AR0135 *ar0135 = to_ar0135(subdev);
 	int ret;
 
-	printk(KERN_ALERT "-------->ar0135_s_stream\n");
-
 	mutex_lock(&ar0135->lock);
 
 	if (enable == 0) {
@@ -460,11 +457,11 @@ static int ar0135_s_stream(struct v4l2_subdev *subdev, int enable)
 	if (ret < 0)
 		goto out;
 #if 1 
-    printk(KERN_ALERT "-------->ar0135_s_stream setting auto exposure\n");
+    printk(KERN_ALERT "r0135_s_stream setting auto exposure\n");
 	ret = ar0135_set_register_array(ar0135, AR0135at_auto_exposure,
 					ARRAY_SIZE(AR0135at_auto_exposure));
 #else
-    printk(KERN_ALERT "-------->ar0135_s_stream NO auto exposure - open LEDs\n");   
+    printk(KERN_ALERT "ar0135_s_stream NO auto exposure - open LEDs\n");   
     ar0135_write_reg(ar0135, 0x3046, 0x0100);
 #endif
 
@@ -594,6 +591,38 @@ struct AR0135_fdp_link_init_t AR0135_fdp_link_init_arr[] = {
 };
 #endif
 
+static u8 ar0144_fpd_link_i2c_read(struct i2c_client *ar0144_i2c_client, u8 id, u8 addr)
+{
+	struct i2c_msg msg[2];
+	u8 reg_addr = addr;
+	int ret = 0;
+	u8 result;
+
+	msg[0].addr = id;
+	msg[0].flags = 0;
+	msg[0].len = 1;
+	msg[0].buf = &reg_addr;
+
+	//read command
+	msg[1].addr = id;
+	msg[1].flags = I2C_M_RD;
+	msg[1].len = 1;
+	msg[1].buf = &result;
+
+	ret = i2c_transfer(ar0144_i2c_client->adapter, msg, 2);
+	if (ret > 0)
+	{
+		printk(KERN_ALERT "ar0135_fpd_link_i2c_read register 0x%x=0x%x\n", msg[1].addr, result);
+	}
+	else
+	{
+		printk(KERN_ALERT "ar0135_fpd_link_i2c_read error: %d\n", ret);
+		return -1;
+	}
+	
+	return result;
+}
+
 static int ar0135_fpd_link_i2c_write(struct i2c_adapter *i2c_master,
 				     struct AR0135_fdp_link_init_t *reg_item)
 {
@@ -632,7 +661,7 @@ static int ar0135_fpd_link_init(struct i2c_client *ar0135_i2c_client)
 						&AR0135_fdp_link_init_arr[i]);
 		if (ret < 0)
 		{
-			printk(KERN_ALERT "-------->ar0135_fpd_link_init adapter: ERROR WRITING: 0x%x addr 0x%x val 0x%x\n", AR0135_fdp_link_init_arr[i].id, AR0135_fdp_link_init_arr[i].addr, AR0135_fdp_link_init_arr[i].val);					 
+			printk(KERN_ALERT "ar0135_fpd_link_init adapter: ERROR WRITING: 0x%x addr 0x%x val 0x%x\n", AR0135_fdp_link_init_arr[i].id, AR0135_fdp_link_init_arr[i].addr, AR0135_fdp_link_init_arr[i].val);					 
 			return ret;
 		}
 	}
@@ -647,12 +676,22 @@ static int ar0135_probe(struct i2c_client *client,
 	struct device_node *endpoint;
 	struct AR0135 *ar0135;
 	int ret;
+	u8 camera_id_res = 0;
 
-	printk(KERN_ALERT "--------> AR0135_probe\n");
+	printk(KERN_ALERT "AR0135_probe\n");
+
+	camera_id_res = ar0144_fpd_link_i2c_read(client, 0x3d, 0x5b);
+	printk(KERN_ALERT "camera id: 0x%x\n", camera_id_res);
+	if (camera_id_res != 0xb4)
+	{
+		printk(KERN_ALERT "AR0135_probe did not find AR0135 exiting\n");
+		return -EINVAL;
+	}
+
 	ret = ar0135_fpd_link_init(client);
 	if (ret < 0)
 	{
-		printk(KERN_ALERT "EYESIGHT Camera Primax AR135 NOT detected\n");
+		printk(KERN_ALERT "ar0135_probe ar0135_fpd_link_init error\n");
 		return ret;	
 	}
 
@@ -663,8 +702,7 @@ static int ar0135_probe(struct i2c_client *client,
 	ar0135->i2c_client = client;
 	ar0135->dev = dev;
 	mutex_init(&ar0135->lock);
-
-	dev_info(dev, "EYESIGHT Camera detected : Primax AR135\n");
+	dev_info(dev, "AR0135 camera detected\n");
 
 	// default values //
 	ar0135->ae = 1;
@@ -706,7 +744,6 @@ static int ar0135_probe(struct i2c_client *client,
 	ar0135->link_freq = v4l2_ctrl_new_int_menu(&ar0135->ctrls, NULL,
 						   V4L2_CID_LINK_FREQ, 0, 0, AR0135_link_freq);
 
-	printk(KERN_ALERT "--------> AR0135_probe - after set link freq\n");
 	if (ar0135->link_freq)
 		ar0135->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 	if (ar0135->ctrls.error) {
@@ -757,8 +794,6 @@ static int ar0135_probe(struct i2c_client *client,
 	}
 
 	ar0135_entity_init_cfg(&ar0135->sd, NULL);
-
-	printk(KERN_ALERT "--------> AR0135_probe - V4L done\n");
 
 	return 0;
 

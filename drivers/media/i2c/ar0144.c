@@ -317,7 +317,6 @@ static int ar0144_s_power(struct v4l2_subdev *sd, int on)
 	ret = ar0144_set_register_array(
 		ar0144, ar0144at_rev4_recommended_setting,
 		ARRAY_SIZE(ar0144at_rev4_recommended_setting));
-
 out:
 	mutex_unlock(&ar0144->lock);
 	return ret;
@@ -557,7 +556,6 @@ static int ar0144_s_stream(struct v4l2_subdev *subdev, int enable)
 
 	ret = ar0144_set_register_array(ar0144, ar0144at_start_stream,
 					ARRAY_SIZE(ar0144at_start_stream));
-
 out:
 	mutex_unlock(&ar0144->lock);
 	return ret;
@@ -661,6 +659,38 @@ struct ar0144_fdp_link_init_t ar0144_fdp_link_init_arr[] = {
 	{0x3d, 0x20, 0x20},
 };
 
+static u8 ar0144_fpd_link_i2c_read(struct i2c_client *ar0144_i2c_client, u8 id, u8 addr)
+{
+	struct i2c_msg msg[2];
+	u8 reg_addr = addr;
+	int ret = 0;
+	u8 result;
+
+	msg[0].addr = id;
+	msg[0].flags = 0;
+	msg[0].len = 1;
+	msg[0].buf = &reg_addr;
+
+	//read command
+	msg[1].addr = id;
+	msg[1].flags = I2C_M_RD;
+	msg[1].len = 1;
+	msg[1].buf = &result;
+
+	ret = i2c_transfer(ar0144_i2c_client->adapter, msg, 2);
+	if (ret > 0)
+	{
+		printk(KERN_ALERT "ar0144_fpd_link_i2c_read register 0x%x=0x%x\n", msg[1].addr, result);
+	}
+	else
+	{
+		printk(KERN_ALERT "ar0144_fpd_link_i2c_read error: %d\n", ret);
+		return -1;
+	}
+	
+	return result;
+}
+
 static int ar0144_fpd_link_i2c_write(struct i2c_adapter *i2c_master,
 				     struct ar0144_fdp_link_init_t *reg_item)
 {
@@ -729,6 +759,7 @@ static bool ar0144_is_camera_abba2(struct i2c_client *ar0144_i2c_client)
 
 }
 
+
 static int ar0144_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
@@ -736,12 +767,23 @@ static int ar0144_probe(struct i2c_client *client,
 	struct device_node *endpoint;
 	struct ar0144 *ar0144;
 	int ret;
+	u8 camera_id_res = 0;
 
-	printk(KERN_ALERT "--------> AR0144_probe\n");
+	printk(KERN_ALERT "AR0144_probe\n");
+
+	camera_id_res = ar0144_fpd_link_i2c_read(client, 0x3d, 0x5b);
+	printk(KERN_ALERT "camera id: 0x%x\n", camera_id_res);
+	if (camera_id_res != 0x32)
+	{
+		printk(KERN_ALERT "AR0144_probe did not find AR0144 exiting\n");
+		return -EINVAL;
+	}
+
+
 	ret = ar0144_fpd_link_init(client);
 	if (ret < 0)
 	{
-		printk(KERN_ALERT "EYESIGHT Camera Primax AR0144 NOT detected\n");
+		printk(KERN_ALERT "AR0144 probe ar0144_fpd_link_init error\n");
 		return ret;	
 	}
 
@@ -756,11 +798,11 @@ static int ar0144_probe(struct i2c_client *client,
 	ar0144->isAbba2 = ar0144_is_camera_abba2(client);
 	if (ar0144->isAbba2)
 	{
-		dev_info(dev, "EYESIGHT Camera detected : JABIL ABB2\n");
+		printk(KERN_ALERT "Camera detected AR0144 ABB2\n");
 	}
 	else
 	{
-		dev_info(dev, "EYESIGHT Camera detected : JABIL ABB1\n");
+		printk(KERN_ALERT "Camera detected AR0144 ABB1\n");
 	}
 
 	// default values //
@@ -854,7 +896,6 @@ static int ar0144_probe(struct i2c_client *client,
 	}
 
 	ar0144_entity_init_cfg(&ar0144->sd, NULL);
-
 	return 0;
 
 free_entity:
