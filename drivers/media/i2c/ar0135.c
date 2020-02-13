@@ -111,22 +111,20 @@ static const struct ar0135_reg_value AR0135at_embedded_data_stats[] = {
 
 static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
 	{0x3046, 0x0100}, // LED_FLASH_EN = 1 -->should sleep for 500ms?
-	{0x311C, 0x0342}, // AE_MAX_EXPOSURE (in rows)
+	{0x311E, 0x0008}, // AE_MIN_EXPOSURE_REG
+	{0x311C, 0x0342}, // AE_MAX_EXPOSURE_REG (in rows)
+	{0x3108, 0x0010}, // AE_MIN_EV_STEP_REG
 	{0x310A, 0x0008}, // AE_MAX_EV_STEP_REG
-	//{0x3108, 0x0002}, // AE_MIN_EX_SEP_REG
-	{0x310C, 0x0010}, // AE_DAMP_OFFSET_REG
-	//{0x310C, 0x400}, // AE_DAMP_OFFSET_REG
+	{0x310C, 0x0200}, // AE_DAMP_OFFSET_REG
 	{0x310E, 0x0200}, // AE_DAMP_GAIN_REG
-	{0x3110, 0x0140}, // AE_DAMP_MAX_REG
-	//{0x3110, 0x300}, // AE_DAMP_MAX_REG
+	{0x3110, 0x0080}, // AE_DAMP_MAX_REG
 	{0x3166, 0x0342}, // AE_AG_EXPOSURE_HI
 	{0x3168, 0x01A3}, // AE_AG_EXPOSURE_LO
 	{0x3040, 0x4000}, // READ_MODE
     {0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
 	{0x306E, 0x9010}, // DATAPATH_SELECT
-	{0x3102, 0x0480}, // AE_LUMA_TARGET  - change according dynamic ROI fix
-	//{0x3102, 0x0435}, // AE_LUMA_TARGET  
-	{0x3100, 0x0003}, // AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain enabled 
+	{0x3102, 0x0450}, // AE_LUMA_TARGET  - change according dynamic ROI fix
+	{0x3100, 0x0013}  // AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain enabled 
 };
 
 static const struct ar0135_reg_value AR0135at_start_stream[] = {
