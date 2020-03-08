@@ -100,7 +100,7 @@ static const struct ar0135_reg_value AR0135at_1280x960_30fps[] = {
 	{0x3012, 0x0122},
 	{0x30A2, 0x0001},
 	{0x30A6, 0x0001},
-	{0x3040, 0x0000}, // READ_MODE
+	{0x3040, 0x0000}, // READ_MODE - HFLIP OFF , VFLIP 0FF
 	{0x3028, 0x0010}, // ROW_SPEED
 };
 
@@ -120,7 +120,7 @@ static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
 	{0x3110, 0x0080}, // AE_DAMP_MAX_REG
 	{0x3166, 0x0342}, // AE_AG_EXPOSURE_HI
 	{0x3168, 0x01A3}, // AE_AG_EXPOSURE_LO
-	{0x3040, 0x4000}, // READ_MODE
+	{0x3040, 0x0000}, // READ_MODE READ_MODE - HFLIP OFF , VFLIP 0FF
     {0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
 	{0x306E, 0x9010}, // DATAPATH_SELECT
 	{0x3102, 0x0450}, // AE_LUMA_TARGET  - change according dynamic ROI fix
@@ -379,11 +379,16 @@ static void set_read_mode(struct v4l2_subdev *sd)
     u16 mode = 0x0000;
 
     if (core->hflip)
+	{
         mode |= 0x4000;
+	}
 
     if (core->vflip)
+	{
         mode |= 0x8000;
+	}
 
+	printk(KERN_ALERT "AR0135: set_read_mode read_mode=0x%x",mode);
     ar0135_write_reg(core, AR0135_R3040_READ_MODE, mode);
 }
 
@@ -497,10 +502,12 @@ static int ar0135_s_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	case V4L2_CID_HFLIP:
 		core->hflip = ctrl->val;
+		printk(KERN_ALERT "AR0135::ar0135_s_ctrl V4L2_CID_HFLIP 0x%x\n", core->hflip);
 		set_read_mode(sd);
 		return 0;
 	case V4L2_CID_VFLIP:
 		core->vflip = ctrl->val;
+		printk(KERN_ALERT "AR0135::ar0135_s_ctrl V4L2_CID_VFLIP 0x%x\n", core->hflip);
 		set_read_mode(sd);
 		return 0;
     case AR0135_CID_AE_ROI:
@@ -512,7 +519,7 @@ static int ar0135_s_ctrl(struct v4l2_ctrl *ctrl)
         set_ae_roi(sd);
         return 0;		
 	default:
-		printk(KERN_ALERT "ar0135_s_ctrl called with invalid ID (id=%x)\n", ctrl->id);
+		printk(KERN_ALERT "AR0135::ar0135_s_ctrl called with invalid ID (id=%x)\n", ctrl->id);
 		return -EINVAL;
 	}
 
