@@ -141,6 +141,8 @@ static const s64 AR0135_link_freq[] = {
 	 1600000000,
 };
 
+static u8 ar0144_fpd_link_i2c_read(struct i2c_client *ar0144_i2c_client, u8 id, u8 addr);
+
 static int ar0135_write_reg(struct AR0135 *ar0135, u16 reg, u16 val)
 {
 	u8 regbuf[4];
@@ -420,12 +422,23 @@ static void set_exposure(struct v4l2_subdev *sd)
  static void set_ae_roi(struct v4l2_subdev *sd)
 {
     struct AR0135 *core = to_ar0135(sd);
+	//u8 read_value = 0;
 
-	printk(KERN_ALERT "-------->set_ae_roi calledx= 0x%x(0x%x) y=0x%x(0x%x)\n",core->ae_roi_x_start_offset,core->ae_roi_x_size, core->ae_roi_y_start_offset,core->ae_roi_y_size);
+	//printk(KERN_ALERT "-------->set_ae_roi calledx= 0x%x(0x%x) y=0x%x(0x%x)\n",core->ae_roi_x_start_offset,core->ae_roi_x_size, core->ae_roi_y_start_offset,core->ae_roi_y_size);
     ar0135_write_reg(core, AR0135_R3140_AE_ROI_X_START_OFFSET , core->ae_roi_x_start_offset);
 	ar0135_write_reg(core, AR0135_R3142_AE_ROI_Y_START_OFFSET, core->ae_roi_y_start_offset);
     ar0135_write_reg(core, AR0135_R3144_AE_ROI_X_SIZE, core->ae_roi_x_size);
 	ar0135_write_reg(core, AR0135_R3146_AE_ROI_Y_SIZE, core->ae_roi_y_size);
+
+	/*read_value = ar0144_fpd_link_i2c_read(core->i2c_client, 0x5A, 0x0);	
+	printk(KERN_ALERT "----->set_ae_roi register read 0x5A00=0x%x\n", read_value);
+
+	read_value = ar0144_fpd_link_i2c_read(core->i2c_client, 0x5A, 0x0);	
+	printk(KERN_ALERT "----->set_ae_roi register read 0x5A00=0x%x\n", read_value);
+	read_value = ar0144_fpd_link_i2c_read(core->i2c_client, 0x5A, 0x0A);	
+	printk(KERN_ALERT "----->set_ae_roi register read 0x5A0A=0x%x\n", read_value);
+	read_value = ar0144_fpd_link_i2c_read(core->i2c_client, 0x5A, 0x0B);	
+	printk(KERN_ALERT "----->set_ae_roi register read 0x5A0B=0x%x\n", read_value);*/
 }
 
 static int ar0135_s_stream(struct v4l2_subdev *subdev, int enable)
@@ -484,7 +497,7 @@ out:
 static int ar0135_s_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct AR0135 *core =
-		container_of(ctrl->handler, struct AR0135, ctrls);
+	container_of(ctrl->handler, struct AR0135, ctrls);
 	struct v4l2_subdev *sd = &core->sd;
 
 	switch (ctrl->id) {
@@ -682,6 +695,7 @@ static int ar0135_probe(struct i2c_client *client,
 	struct AR0135 *ar0135;
 	int ret;
 	u8 camera_id_res = 0;
+	//u8 read_value = 0;
 
 	printk(KERN_ALERT "AR0135_probe\n");
 
@@ -800,6 +814,12 @@ static int ar0135_probe(struct i2c_client *client,
 
 	ar0135_entity_init_cfg(&ar0135->sd, NULL);
 
+	/*read_value = ar0144_fpd_link_i2c_read(client, 0x5A, 0x0);	
+	printk(KERN_ALERT "----->ar0135_probe register read 0x5A00=0x%x\n", read_value);
+	read_value = ar0144_fpd_link_i2c_read(client, 0x5A, 0x0A);	
+	printk(KERN_ALERT "----->ar0135_probe register read 0x5A0A=0x%x\n", read_value);
+	read_value = ar0144_fpd_link_i2c_read(client, 0x5A, 0x0B);	
+	printk(KERN_ALERT "----->ar0135_probe register read 0x5A0B=0x%x\n", read_value);*/
 	return 0;
 
 free_entity:
