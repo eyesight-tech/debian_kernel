@@ -419,16 +419,39 @@ static void set_exposure(struct v4l2_subdev *sd)
     ar0135_write_reg(core, AR0135_R3012_COARSE_INTEGRATION_TIME, core->exposure);
 }
 
- static void set_ae_roi(struct v4l2_subdev *sd)
+ static int set_ae_roi(struct v4l2_subdev *sd)
 {
     struct AR0135 *core = to_ar0135(sd);
+	int ret = 0;
 	//u8 read_value = 0;
 
 	//printk(KERN_ALERT "-------->set_ae_roi calledx= 0x%x(0x%x) y=0x%x(0x%x)\n",core->ae_roi_x_start_offset,core->ae_roi_x_size, core->ae_roi_y_start_offset,core->ae_roi_y_size);
-    ar0135_write_reg(core, AR0135_R3140_AE_ROI_X_START_OFFSET , core->ae_roi_x_start_offset);
-	ar0135_write_reg(core, AR0135_R3142_AE_ROI_Y_START_OFFSET, core->ae_roi_y_start_offset);
-    ar0135_write_reg(core, AR0135_R3144_AE_ROI_X_SIZE, core->ae_roi_x_size);
-	ar0135_write_reg(core, AR0135_R3146_AE_ROI_Y_SIZE, core->ae_roi_y_size);
+    ret = ar0135_write_reg(core, AR0135_R3140_AE_ROI_X_START_OFFSET , core->ae_roi_x_start_offset);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_ae_roi cannot set  AR0135_R3140_AE_ROI_X_START_OFFSET ret val: %d\n", ret);
+		return ret;
+	}
+	ret = ar0135_write_reg(core, AR0135_R3142_AE_ROI_Y_START_OFFSET, core->ae_roi_y_start_offset);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_ae_roi cannot set  AR0135_R3142_AE_ROI_Y_START_OFFSET ret val: %d\n", ret);
+		return ret;
+	}
+
+    ret = ar0135_write_reg(core, AR0135_R3144_AE_ROI_X_SIZE, core->ae_roi_x_size);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_ae_roi cannot set  AR0135_R3144_AE_ROI_X_SIZE ret val: %d\n", ret);
+		return ret;
+	}
+
+	ret = ar0135_write_reg(core, AR0135_R3146_AE_ROI_Y_SIZE, core->ae_roi_y_size);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_ae_roi cannot set  AR0135_R3146_AE_ROI_Y_SIZE ret val: %d\n", ret);
+		return ret;
+	}
 
 	/*read_value = ar0144_fpd_link_i2c_read(core->i2c_client, 0x5A, 0x0);	
 	printk(KERN_ALERT "----->set_ae_roi register read 0x5A00=0x%x\n", read_value);
@@ -439,6 +462,7 @@ static void set_exposure(struct v4l2_subdev *sd)
 	printk(KERN_ALERT "----->set_ae_roi register read 0x5A0A=0x%x\n", read_value);
 	read_value = ar0144_fpd_link_i2c_read(core->i2c_client, 0x5A, 0x0B);	
 	printk(KERN_ALERT "----->set_ae_roi register read 0x5A0B=0x%x\n", read_value);*/
+	return 0;
 }
 
 static int ar0135_s_stream(struct v4l2_subdev *subdev, int enable)
@@ -529,8 +553,7 @@ static int ar0135_s_ctrl(struct v4l2_ctrl *ctrl)
         core->ae_roi_x_size = ctrl->p_cur.p_u16[2];
         core->ae_roi_y_size = ctrl->p_cur.p_u16[3];
 		//printk(KERN_ALERT "-------->ar0135_s_ctrl ROI: Top-left=(0x%x, 0x%x) Size=(0x%x, 0x%x)\n",ctrl->p_cur.p_u16[0],ctrl->p_cur.p_u16[1], ctrl->p_cur.p_u16[2],ctrl->p_cur.p_u16[3]);
-        set_ae_roi(sd);
-        return 0;		
+        return set_ae_roi(sd);
 	default:
 		printk(KERN_ALERT "AR0135::ar0135_s_ctrl called with invalid ID (id=%x)\n", ctrl->id);
 		return -EINVAL;
