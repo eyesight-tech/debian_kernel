@@ -100,7 +100,7 @@ static const struct ar0135_reg_value AR0135at_1280x960_30fps[] = {
 	{0x3012, 0x0122},
 	{0x30A2, 0x0001},
 	{0x30A6, 0x0001},
-	{0x3040, 0x0000}, // READ_MODE
+	{0x3040, 0x0000}, // READ_MODE - HFLIP OFF , VFLIP 0FF
 	{0x3028, 0x0010}, // ROW_SPEED
 };
 
@@ -110,15 +110,21 @@ static const struct ar0135_reg_value AR0135at_embedded_data_stats[] = {
 };
 
 static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
-	{0x3100, 0x0003}, // AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain enabled 
-	{0x311C, 0x0342}, // AE_MAX_EXPOSURE (in rows)
-	{0x3102, 0x0500}, // AE_LUMA_TARGET
-	{0x3108, 0x0001}, // AE_MIN_EV_STEP_REG
-	{0x310A, 0x0100}, // AE_MAX_EV_STEP_REG
-	{0x310C, 0x0100}, // AE_DAMP_OFFSET_REG
-	{0x310E, 0x0100}, // AE_DAMP_GAIN_REG
-	{0x3110, 0x00E0}, // AE_DAMP_MAX_REG
-	{0x3046, 0x0100}, // LED_FLASH_EN = 1	
+	{0x3046, 0x0100}, // LED_FLASH_EN = 1 -->should sleep for 500ms?
+	{0x311E, 0x0008}, // AE_MIN_EXPOSURE_REG
+	{0x311C, 0x0342}, // AE_MAX_EXPOSURE_REG (in rows)
+	{0x3108, 0x0010}, // AE_MIN_EV_STEP_REG
+	{0x310A, 0x0008}, // AE_MAX_EV_STEP_REG
+	{0x310C, 0x0200}, // AE_DAMP_OFFSET_REG
+	{0x310E, 0x0200}, // AE_DAMP_GAIN_REG
+	{0x3110, 0x0080}, // AE_DAMP_MAX_REG
+	{0x3166, 0x0342}, // AE_AG_EXPOSURE_HI
+	{0x3168, 0x01A3}, // AE_AG_EXPOSURE_LO
+	{0x3040, 0x0000}, // READ_MODE READ_MODE - HFLIP OFF , VFLIP 0FF
+    {0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
+	{0x306E, 0x9010}, // DATAPATH_SELECT
+	{0x3102, 0x0450}, // AE_LUMA_TARGET  - change according dynamic ROI fix
+	{0x3100, 0x0013}  // AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain enabled 
 };
 
 static const struct ar0135_reg_value AR0135at_start_stream[] = {
@@ -131,8 +137,11 @@ static const struct ar0135_reg_value AR0135at_stop_stream[] = {
 };
 
 static const s64 AR0135_link_freq[] = {
-	800000000,
+	//800000000,
+	 1600000000,
 };
+
+static u8 ar0144_fpd_link_i2c_read(struct i2c_client *ar0144_i2c_client, u8 id, u8 addr);
 
 static int ar0135_write_reg(struct AR0135 *ar0135, u16 reg, u16 val)
 {
@@ -164,7 +173,7 @@ static int ar0135_read_reg(struct AR0135 *ar0135, u16 reg, u16 *val)
 	ret = i2c_master_send(ar0135->i2c_client, buf, 2);
 	if (ret < 0) {
 		dev_err(&ar0135->i2c_client->dev,
-			"%s: write reg error %d: reg=%x\n",
+			"%s: write reg error %d: reg=0x%x\n",
 			__func__, ret, reg);
 		return ret;
 	}
@@ -172,7 +181,7 @@ static int ar0135_read_reg(struct AR0135 *ar0135, u16 reg, u16 *val)
 	ret = i2c_master_recv(ar0135->i2c_client, buf, 2);
 	if (ret < 0) {
 		dev_err(&ar0135->i2c_client->dev,
-			"%s: read reg error %d: reg=%x\n",
+			"%s: read reg error %d: reg=0x%x\n",
 			__func__, ret, reg);
 		return ret;
 	}
@@ -212,7 +221,6 @@ static int ar0135_s_power(struct v4l2_subdev *sd, int on)
 	u16 reg_val;
 	int ret = 0;
 
-	printk(KERN_ALERT "-------->ar0135_s_power start");
 	if (!on)
 		return 0;
 
@@ -373,11 +381,16 @@ static void set_read_mode(struct v4l2_subdev *sd)
     u16 mode = 0x0000;
 
     if (core->hflip)
+	{
         mode |= 0x4000;
+	}
 
     if (core->vflip)
+	{
         mode |= 0x8000;
+	}
 
+	printk(KERN_ALERT "AR0135: set_read_mode read_mode=0x%x",mode);
     ar0135_write_reg(core, AR0135_R3040_READ_MODE, mode);
 }
 
@@ -406,22 +419,56 @@ static void set_exposure(struct v4l2_subdev *sd)
     ar0135_write_reg(core, AR0135_R3012_COARSE_INTEGRATION_TIME, core->exposure);
 }
 
- static void set_ae_roi(struct v4l2_subdev *sd)
+ static int set_ae_roi(struct v4l2_subdev *sd)
 {
     struct AR0135 *core = to_ar0135(sd);
+	int ret = 0;
+	//u8 read_value = 0;
 
-    ar0135_write_reg(core, AR0135_R3140_AE_ROI_X_START_OFFSET , core->ae_roi_x_start_offset);
-    ar0135_write_reg(core, AR0135_R3142_AE_ROI_Y_START_OFFSET, core->ae_roi_y_start_offset);
-    ar0135_write_reg(core, AR0135_R3144_AE_ROI_X_SIZE, core->ae_roi_x_size);
-    ar0135_write_reg(core, AR0135_R3146_AE_ROI_Y_SIZE, core->ae_roi_y_size);
+	//printk(KERN_ALERT "-------->set_ae_roi calledx= 0x%x(0x%x) y=0x%x(0x%x)\n",core->ae_roi_x_start_offset,core->ae_roi_x_size, core->ae_roi_y_start_offset,core->ae_roi_y_size);
+    ret = ar0135_write_reg(core, AR0135_R3140_AE_ROI_X_START_OFFSET , core->ae_roi_x_start_offset);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_ae_roi cannot set  AR0135_R3140_AE_ROI_X_START_OFFSET ret val: %d\n", ret);
+		return ret;
+	}
+	ret = ar0135_write_reg(core, AR0135_R3142_AE_ROI_Y_START_OFFSET, core->ae_roi_y_start_offset);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_ae_roi cannot set  AR0135_R3142_AE_ROI_Y_START_OFFSET ret val: %d\n", ret);
+		return ret;
+	}
+
+    ret = ar0135_write_reg(core, AR0135_R3144_AE_ROI_X_SIZE, core->ae_roi_x_size);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_ae_roi cannot set  AR0135_R3144_AE_ROI_X_SIZE ret val: %d\n", ret);
+		return ret;
+	}
+
+	ret = ar0135_write_reg(core, AR0135_R3146_AE_ROI_Y_SIZE, core->ae_roi_y_size);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_ae_roi cannot set  AR0135_R3146_AE_ROI_Y_SIZE ret val: %d\n", ret);
+		return ret;
+	}
+
+	/*read_value = ar0144_fpd_link_i2c_read(core->i2c_client, 0x5A, 0x0);	
+	printk(KERN_ALERT "----->set_ae_roi register read 0x5A00=0x%x\n", read_value);
+
+	read_value = ar0144_fpd_link_i2c_read(core->i2c_client, 0x5A, 0x0);	
+	printk(KERN_ALERT "----->set_ae_roi register read 0x5A00=0x%x\n", read_value);
+	read_value = ar0144_fpd_link_i2c_read(core->i2c_client, 0x5A, 0x0A);	
+	printk(KERN_ALERT "----->set_ae_roi register read 0x5A0A=0x%x\n", read_value);
+	read_value = ar0144_fpd_link_i2c_read(core->i2c_client, 0x5A, 0x0B);	
+	printk(KERN_ALERT "----->set_ae_roi register read 0x5A0B=0x%x\n", read_value);*/
+	return 0;
 }
 
 static int ar0135_s_stream(struct v4l2_subdev *subdev, int enable)
 {
 	struct AR0135 *ar0135 = to_ar0135(subdev);
 	int ret;
-
-	printk(KERN_ALERT "-------->ar0135_s_stream\n");
 
 	mutex_lock(&ar0135->lock);
 
@@ -449,9 +496,15 @@ static int ar0135_s_stream(struct v4l2_subdev *subdev, int enable)
 					ARRAY_SIZE(AR0135at_embedded_data_stats));
 	if (ret < 0)
 		goto out;
-
+#if 1 
+    printk(KERN_ALERT "r0135_s_stream setting auto exposure\n");
 	ret = ar0135_set_register_array(ar0135, AR0135at_auto_exposure,
 					ARRAY_SIZE(AR0135at_auto_exposure));
+#else
+    printk(KERN_ALERT "ar0135_s_stream NO auto exposure - open LEDs\n");   
+    ar0135_write_reg(ar0135, 0x3046, 0x0100);
+#endif
+
 
 	if (ret < 0)
 		goto out;
@@ -468,10 +521,10 @@ out:
 static int ar0135_s_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct AR0135 *core =
-		container_of(ctrl->handler, struct AR0135, ctrls);
+	container_of(ctrl->handler, struct AR0135, ctrls);
 	struct v4l2_subdev *sd = &core->sd;
 
- 	switch (ctrl->id) {
+	switch (ctrl->id) {
     case V4L2_CID_EXPOSURE_AUTO:
         core->ae = (ctrl->val == V4L2_EXPOSURE_AUTO) ? 1 : 0;
         set_ae(sd);
@@ -486,10 +539,12 @@ static int ar0135_s_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	case V4L2_CID_HFLIP:
 		core->hflip = ctrl->val;
+		printk(KERN_ALERT "AR0135::ar0135_s_ctrl V4L2_CID_HFLIP 0x%x\n", core->hflip);
 		set_read_mode(sd);
 		return 0;
 	case V4L2_CID_VFLIP:
 		core->vflip = ctrl->val;
+		printk(KERN_ALERT "AR0135::ar0135_s_ctrl V4L2_CID_VFLIP 0x%x\n", core->hflip);
 		set_read_mode(sd);
 		return 0;
     case AR0135_CID_AE_ROI:
@@ -497,9 +552,10 @@ static int ar0135_s_ctrl(struct v4l2_ctrl *ctrl)
         core->ae_roi_y_start_offset = ctrl->p_cur.p_u16[1];
         core->ae_roi_x_size = ctrl->p_cur.p_u16[2];
         core->ae_roi_y_size = ctrl->p_cur.p_u16[3];
-        set_ae_roi(sd);
-        return 0;		
+		//printk(KERN_ALERT "-------->ar0135_s_ctrl ROI: Top-left=(0x%x, 0x%x) Size=(0x%x, 0x%x)\n",ctrl->p_cur.p_u16[0],ctrl->p_cur.p_u16[1], ctrl->p_cur.p_u16[2],ctrl->p_cur.p_u16[3]);
+        return set_ae_roi(sd);
 	default:
+		printk(KERN_ALERT "AR0135::ar0135_s_ctrl called with invalid ID (id=%x)\n", ctrl->id);
 		return -EINVAL;
 	}
 
@@ -562,44 +618,51 @@ struct AR0135_fdp_link_init_t AR0135_fdp_link_init_arr[] = {
 	{0x3d, 0x20, 0x20}, // Forwarding enabled for RX Port 0
 	{0x3d, 0x33, 0x23}, // Enable CSI TX, 2 lanes, continouos clock mode enabled	
 };
-#else // Pattern from deserializer
+#else 
 struct AR0135_fdp_link_init_t AR0135_fdp_link_init_arr[] = {
-	{0x3d, 0x20, 0x30}, // Disable video forwarding
-	{0x3d, 0x1F, 0x02}, // 800 Mbps serial rate
-	{0x3d, 0x33, 0x21}, // CSI0 enable, 2 lanes
-	{0x3d, 0xB0, 0x00}, // Indirect Pattern Gen Registers
-	{0x3d, 0xB1, 0x01}, // PGEN_CTL : Enable Pattern Generation
-	{0x3d, 0xB2, 0x01},
-	{0x3d, 0xB1, 0x02}, // PGEN_CFG : 8 Color Bars, Block size = 3 bytes
-	{0x3d, 0xB2, 0x33},
-	{0x3d, 0xB1, 0x03}, // PGEN_CSI_DI : RAW12(2c) VC=0
-	{0x3d, 0xB2, 0x2C},
-	{0x3d, 0xB1, 0x04}, // PGEN_LINE_SIZE1 : 1920 bytes/line (1280 pixels)
-	{0x3d, 0xB2, 0x0F},
-	{0x3d, 0xB1, 0x05}, // PGEN_LINE_SIZE0
-	{0x3d, 0xB2, 0x00},
-	{0x3d, 0xB1, 0x06}, // PGEN_BAR_SIZE1 : 240 bytes/bar
-	{0x3d, 0xB2, 0x01},
-	{0x3d, 0xB1, 0x07}, // PGEN_BAR_SIZE0
-	{0x3d, 0xB2, 0xE0},
-	{0x3d, 0xB1, 0x08}, // PGEN_ACT_LPF1 : 960 lines
-	{0x3d, 0xB2, 0x03},
-	{0x3d, 0xB1, 0x09}, // PGEN_ACT_LPF0
-	{0x3d, 0xB2, 0xC0},
-	{0x3d, 0xB1, 0x0A}, // PGEN_TOT_LPF1 : 
-	{0x3d, 0xB2, 0x04},
-	{0x3d, 0xB1, 0x0B}, // PGEN_TOT_LPF0
-	{0x3d, 0xB2, 0x1A},
-	{0x3d, 0xB1, 0x0C}, // PGEN_LINE_PD1
-	{0x3d, 0xB2, 0x0C},
-	{0x3d, 0xB1, 0x0D}, // PGEN_LINE_PD0
-	{0x3d, 0xB2, 0x67},
-	{0x3d, 0xB1, 0x0E}, // PGEN_VBP
-	{0x3d, 0xB2, 0x21},
-	{0x3d, 0xB1, 0x0F}, // PGEN_VFP
-	{0x3d, 0xB2, 0x0A},
+	{0x3d, 0x4C, 0x01}, // Enable access to RX port 0 registers
+	{0x3d, 0x58, 0x58}, // Back-channel enabled
+	{0x3d, 0x6D, 0x7e}, // Coax-cable; RAW12-HS mode
+	{0x3d, 0x6E, 0x28}, // BC_GPIO
+	{0x3d, 0x5C, 0xb4}, // Serializer alias I2C address
+	{0x3d, 0x5D, 0x20}, // AR0135 I2c address
+	{0x3d, 0x65, 0x20}, // AR0135 I2c alias
+	{0x3d, 0x20, 0x20}, // Forwarding enabled for RX Port 0
+	{0x3d, 0x33, 0x23}, // Enable CSI TX, 2 lanes, continouos clock mode enabled	
 };
 #endif
+
+static u8 ar0144_fpd_link_i2c_read(struct i2c_client *ar0144_i2c_client, u8 id, u8 addr)
+{
+	struct i2c_msg msg[2];
+	u8 reg_addr = addr;
+	int ret = 0;
+	u8 result;
+
+	msg[0].addr = id;
+	msg[0].flags = 0;
+	msg[0].len = 1;
+	msg[0].buf = &reg_addr;
+
+	//read command
+	msg[1].addr = id;
+	msg[1].flags = I2C_M_RD;
+	msg[1].len = 1;
+	msg[1].buf = &result;
+
+	ret = i2c_transfer(ar0144_i2c_client->adapter, msg, 2);
+	if (ret > 0)
+	{
+		printk(KERN_ALERT "ar0135_fpd_link_i2c_read register 0x%x=0x%x\n", msg[1].addr, result);
+	}
+	else
+	{
+		printk(KERN_ALERT "ar0135_fpd_link_i2c_read error: %d\n", ret);
+		return -1;
+	}
+	
+	return result;
+}
 
 static int ar0135_fpd_link_i2c_write(struct i2c_adapter *i2c_master,
 				     struct AR0135_fdp_link_init_t *reg_item)
@@ -639,7 +702,7 @@ static int ar0135_fpd_link_init(struct i2c_client *ar0135_i2c_client)
 						&AR0135_fdp_link_init_arr[i]);
 		if (ret < 0)
 		{
-			printk(KERN_ALERT "-------->ar0135_fpd_link_init adapter: ERROR WRITING: 0x%x addr 0x%x val 0x%x\n", AR0135_fdp_link_init_arr[i].id, AR0135_fdp_link_init_arr[i].addr, AR0135_fdp_link_init_arr[i].val);					 
+			printk(KERN_ALERT "ar0135_fpd_link_init adapter: ERROR WRITING: 0x%x addr 0x%x val 0x%x\n", AR0135_fdp_link_init_arr[i].id, AR0135_fdp_link_init_arr[i].addr, AR0135_fdp_link_init_arr[i].val);					 
 			return ret;
 		}
 	}
@@ -654,11 +717,25 @@ static int ar0135_probe(struct i2c_client *client,
 	struct device_node *endpoint;
 	struct AR0135 *ar0135;
 	int ret;
+	u8 camera_id_res = 0;
+	//u8 read_value = 0;
 
-	printk(KERN_ALERT "--------> AR0135_probe\n");
+	printk(KERN_ALERT "AR0135_probe\n");
+
+	camera_id_res = ar0144_fpd_link_i2c_read(client, 0x3d, 0x5b);
+	printk(KERN_ALERT "camera id: 0x%x\n", camera_id_res);
+	if (camera_id_res != 0xb4)
+	{
+		printk(KERN_ALERT "AR0135_probe did not find AR0135 exiting\n");
+		return -EINVAL;
+	}
+
 	ret = ar0135_fpd_link_init(client);
 	if (ret < 0)
+	{
+		printk(KERN_ALERT "ar0135_probe ar0135_fpd_link_init error\n");
 		return ret;	
+	}
 
 	ar0135 = devm_kzalloc(dev, sizeof(struct AR0135), GFP_KERNEL);
 	if (!ar0135)
@@ -667,8 +744,7 @@ static int ar0135_probe(struct i2c_client *client,
 	ar0135->i2c_client = client;
 	ar0135->dev = dev;
 	mutex_init(&ar0135->lock);
-
-	dev_info(dev, "Detected Primax AR135 version of camera\n");
+	dev_info(dev, "AR0135 camera detected\n");
 
 	// default values //
 	ar0135->ae = 1;
@@ -676,7 +752,6 @@ static int ar0135_probe(struct i2c_client *client,
 	ar0135->ae_roi_y_start_offset = 0;
 	ar0135->ae_roi_x_size = 1280;
 	ar0135->ae_roi_y_size = 960;		
-
 
 	endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
 	if (!endpoint) {
@@ -762,6 +837,12 @@ static int ar0135_probe(struct i2c_client *client,
 
 	ar0135_entity_init_cfg(&ar0135->sd, NULL);
 
+	/*read_value = ar0144_fpd_link_i2c_read(client, 0x5A, 0x0);	
+	printk(KERN_ALERT "----->ar0135_probe register read 0x5A00=0x%x\n", read_value);
+	read_value = ar0144_fpd_link_i2c_read(client, 0x5A, 0x0A);	
+	printk(KERN_ALERT "----->ar0135_probe register read 0x5A0A=0x%x\n", read_value);
+	read_value = ar0144_fpd_link_i2c_read(client, 0x5A, 0x0B);	
+	printk(KERN_ALERT "----->ar0135_probe register read 0x5A0B=0x%x\n", read_value);*/
 	return 0;
 
 free_entity:
