@@ -93,7 +93,7 @@ static const struct ar0144_reg_value ar0144at_rev4_recommended_setting[] = {
 	{0x3EE2, 0x180E},
 	{0x3EE4, 0x0808},
 	{0X3EEA, 0x2A09},
-	{0x3060, 0x000D},
+	{0x3060, 0x001B},
 	{0x3092, 0x00CF},
 	{0x3268, 0x0030},
 	{0x3786, 0x0006},
@@ -170,15 +170,16 @@ static const struct ar0144_reg_value ar0144at_auto_exposure[] = {
 
 static const struct ar0144_reg_value ar0144at_auto_exposure_abba2[] = {
 	{0x3270, 0x0100}, // LED_FLASH_EN = 1
-	{0x3100, 0x0007}, // AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain enabled
-	{0x311C, 0x0046}, // AE_MAX_EXPOSURE (in rows)
-	{0x3102, 0x5650}, // AE_LUMA_TARGET
-	{0x3108, 0x0008}, // AE_MIN_EV_STEP_REG
-	{0x310A, 0x0902}, // AE_MAX_EV_STEP_REG
+	{0x3100, 0x0001}, // AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain enabled
+	{0x311C, 0x0048}, // AE_MAX_EXPOSURE (in rows)
+	{0x3102, 0x4650}, // AE_LUMA_TARGET
+	{0x3108, 0x0001}, // AE_MIN_EV_STEP_REG
+	{0x310A, 0x0004}, // AE_MAX_EV_STEP_REG
 	{0x310C, 0x1008}, // AE_DAMP_OFFSET_REG
 	{0x310E, 0x1010}, // AE_DAMP_GAIN_REG
 	{0x3110, 0x0060}, // AE_DAMP_MAX_REG
-	{0x3166, 0x0046}, // AE_AG_EXPOSURE_HIGH
+	{0x3166, 0x0048}, // AE_AG_EXPOSURE_HIGH
+	{0x311E, 0x0005}  // AE_MIN_EXPOSURE_REG
 };
 
 static const struct ar0144_reg_value ar0144at_start_stream[] = {
@@ -195,6 +196,37 @@ static const s64 ar0144_link_freq[] = {
 	768000000,
 };
 
+static u8 ar0144_fpd_link_i2c_read(struct i2c_client *ar0144_i2c_client, u8 id, u8 addr)
+{
+	struct i2c_msg msg[2];
+	u8 reg_addr = addr;
+	int ret = 0;
+	u8 result;
+
+	msg[0].addr = id;
+	msg[0].flags = 0;
+	msg[0].len = 1;
+	msg[0].buf = &reg_addr;
+
+	//read command
+	msg[1].addr = id;
+	msg[1].flags = I2C_M_RD;
+	msg[1].len = 1;
+	msg[1].buf = &result;
+
+	ret = i2c_transfer(ar0144_i2c_client->adapter, msg, 2);
+	if (ret > 0)
+	{
+		printk(KERN_ALERT "ar0144_fpd_link_i2c_read register 0x%x=0x%x\n", msg[1].addr, result);
+	}
+	else
+	{
+		printk(KERN_ALERT "ar0144_fpd_link_i2c_read error: %d\n", ret);
+		return -1;
+	}
+	
+	return result;
+}
 static int ar0144_write_reg8(struct ar0144 *ar0144, u16 reg, u8 val)
 {
     u8 regbuf[3];
@@ -459,7 +491,7 @@ static void set_read_mode(struct v4l2_subdev *sd)
 static void set_ae(struct v4l2_subdev *sd)
 {
     struct ar0144 *core = to_ar0144(sd);
-    u16 val = 0x00;
+    u16 val = 0x01;
 
     if (core->ae)
         val = 0x03;
@@ -470,10 +502,18 @@ static void set_ae(struct v4l2_subdev *sd)
  static void set_gain(struct v4l2_subdev *sd)
 {
     struct ar0144 *core = to_ar0144(sd);
-
-    ar0144_write_reg(core, AR0144_R3060_ANALOG_GAIN, core->global_gain);
+	ar0144_write_reg(core, AR0144_R3060_ANALOG_GAIN, core->global_gain);
 }
+#ifdef DEBUG
+static void print_values(const char *msg, struct v4l2_subdev *sd)
+{
+	struct ar0144 *core = to_ar0144(sd);
 
+	u16 val = 0;
+	ar0144_read_reg(core, AR0144_R3060_ANALOG_GAIN, &val);
+	printk(KERN_ALERT "%s ar0144 gain :  0x%x=0x%x\n", msg, AR0144_R3060_ANALOG_GAIN, val);
+}
+#endif
  static void set_exposure(struct v4l2_subdev *sd)
 {
     struct ar0144 *core = to_ar0144(sd);
@@ -552,10 +592,11 @@ static int ar0144_s_stream(struct v4l2_subdev *subdev, int enable)
     set_ae(subdev);
     set_gain(subdev);
     set_exposure(subdev);	
-        set_ae_roi(sd);
+    set_ae_roi(sd);
 
 	ret = ar0144_set_register_array(ar0144, ar0144at_start_stream,
 					ARRAY_SIZE(ar0144at_start_stream));
+					
 out:
 	mutex_unlock(&ar0144->lock);
 	return ret;
@@ -658,38 +699,6 @@ struct ar0144_fdp_link_init_t ar0144_fdp_link_init_arr[] = {
 	{0x19, 0x33, 0x07},
 	{0x3d, 0x20, 0x20},
 };
-
-static u8 ar0144_fpd_link_i2c_read(struct i2c_client *ar0144_i2c_client, u8 id, u8 addr)
-{
-	struct i2c_msg msg[2];
-	u8 reg_addr = addr;
-	int ret = 0;
-	u8 result;
-
-	msg[0].addr = id;
-	msg[0].flags = 0;
-	msg[0].len = 1;
-	msg[0].buf = &reg_addr;
-
-	//read command
-	msg[1].addr = id;
-	msg[1].flags = I2C_M_RD;
-	msg[1].len = 1;
-	msg[1].buf = &result;
-
-	ret = i2c_transfer(ar0144_i2c_client->adapter, msg, 2);
-	if (ret > 0)
-	{
-		printk(KERN_ALERT "ar0144_fpd_link_i2c_read register 0x%x=0x%x\n", msg[1].addr, result);
-	}
-	else
-	{
-		printk(KERN_ALERT "ar0144_fpd_link_i2c_read error: %d\n", ret);
-		return -1;
-	}
-	
-	return result;
-}
 
 static int ar0144_fpd_link_i2c_write(struct i2c_adapter *i2c_master,
 				     struct ar0144_fdp_link_init_t *reg_item)
@@ -806,11 +815,12 @@ static int ar0144_probe(struct i2c_client *client,
 	}
 
 	// default values //
-	ar0144->ae = 1;
-	ar0144->ae_roi_x_start_offset = 0;
-	ar0144->ae_roi_y_start_offset = 0;
-	ar0144->ae_roi_x_size = 1280;
-	ar0144->ae_roi_y_size = 800;		
+	ar0144->ae = 0;
+	ar0144->ae_roi_x_start_offset 	= 0;
+	ar0144->ae_roi_y_start_offset 	= 0;
+	ar0144->ae_roi_x_size 			= 1280;
+	ar0144->ae_roi_y_size 			= 800;
+	ar0144->global_gain				= 0x1b;		
 
 
 	endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
