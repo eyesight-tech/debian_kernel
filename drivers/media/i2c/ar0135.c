@@ -118,13 +118,13 @@ static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
 	{0x310C, 0x0200}, // AE_DAMP_OFFSET_REG
 	{0x310E, 0x0200}, // AE_DAMP_GAIN_REG
 	{0x3110, 0x0080}, // AE_DAMP_MAX_REG
-	{0x3166, 0x0342}, // AE_AG_EXPOSURE_HI
-	{0x3168, 0x01A3}, // AE_AG_EXPOSURE_LO
+//	{0x3166, 0x0342}, // AE_AG_EXPOSURE_HI
+//	{0x3168, 0x01A3}, // AE_AG_EXPOSURE_LO
 	{0x3040, 0x0000}, // READ_MODE READ_MODE - HFLIP OFF , VFLIP 0FF
     {0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
 	{0x306E, 0x9010}, // DATAPATH_SELECT
 	{0x3102, 0x0450}, // AE_LUMA_TARGET  - change according dynamic ROI fix
-	{0x3100, 0x0013}  // AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain enabled 
+	{0x3100, 0x0041}  // AG*4 static, only integration time is variable 
 };
 
 static const struct ar0135_reg_value AR0135at_start_stream[] = {
