@@ -86,7 +86,7 @@ static const struct ar0135_reg_value ar0135at_recommended_setting[] = {
 	{0x302C, 0x0002}, // VT_SYS_CLK_DIV
 	{0x302E, 0x0002}, // PRE_PLL_CLK_DIV
 	{0x3030, 0x0030}, // PLL_MULTIPLIER
-	{0x30B0, 0x0480}, // DIGITAL_TEST    
+	{0x30B0, 0x04A0}, // DIGITAL_TEST    
 };
 
 static const struct ar0135_reg_value AR0135at_1280x960_30fps[] = {
@@ -96,7 +96,7 @@ static const struct ar0135_reg_value AR0135at_1280x960_30fps[] = {
 	{0x3008, 0x04FF},
 	{0x300A, 0x05B0}, 
 	{0x300C, 0x0672},
-	{0x30B0, 0x0080}, // DIGITAL_TEST
+	//{0x30B0, 0x04A0}, // DIGITAL_TEST
 	{0x3012, 0x0122},
 	{0x30A2, 0x0001},
 	{0x30A6, 0x0001},
@@ -123,8 +123,8 @@ static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
 	{0x3040, 0x0000}, // READ_MODE READ_MODE - HFLIP OFF , VFLIP 0FF
     {0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
 	{0x306E, 0x9010}, // DATAPATH_SELECT
-	{0x3102, 0x0450}, // AE_LUMA_TARGET  - change according dynamic ROI fix
-	{0x3100, 0x0041}  // AG*4 static, only integration time is variable 
+	{0x3102, 0x0490}, // AE_LUMA_TARGET  - change according dynamic ROI fix
+	{0x3100, 0x0001}  // AG*4 static, only integration time is variable 
 };
 
 static const struct ar0135_reg_value AR0135at_start_stream[] = {
