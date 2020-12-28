@@ -86,7 +86,7 @@ static const struct ar0135_reg_value ar0135at_recommended_setting[] = {
 	{0x302C, 0x0002}, // VT_SYS_CLK_DIV
 	{0x302E, 0x0002}, // PRE_PLL_CLK_DIV
 	{0x3030, 0x0030}, // PLL_MULTIPLIER
-	{0x30B0, 0x04A0}, // DIGITAL_TEST    
+	{0x30B0, 0x0480}, // DIGITAL_TEST    
 };
 
 static const struct ar0135_reg_value AR0135at_1280x960_30fps[] = {
@@ -111,7 +111,7 @@ static const struct ar0135_reg_value AR0135at_embedded_data_stats[] = {
 
 static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
 	{0x3046, 0x0100}, // LED_FLASH_EN = 1 -->should sleep for 500ms?
-	{0x311E, 0x0008}, // AE_MIN_EXPOSURE_REG
+	{0x311E, 0x0002}, // AE_MIN_EXPOSURE_REG
 	{0x311C, 0x0342}, // AE_MAX_EXPOSURE_REG (in rows)
 	{0x3108, 0x0010}, // AE_MIN_EV_STEP_REG
 	{0x310A, 0x0008}, // AE_MAX_EV_STEP_REG
@@ -123,7 +123,7 @@ static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
 	{0x3040, 0x0000}, // READ_MODE READ_MODE - HFLIP OFF , VFLIP 0FF
     {0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
 	{0x306E, 0x9010}, // DATAPATH_SELECT
-	{0x3102, 0x0490}, // AE_LUMA_TARGET  - change according dynamic ROI fix
+	{0x3102, 0x0550}, // AE_LUMA_TARGET  - change according dynamic ROI fix
 	{0x3100, 0x0001}  // AG*4 static, only integration time is variable 
 };
 
@@ -206,7 +206,7 @@ static int ar0135_set_register_array(struct AR0135 *ar0135,
 		else
 		{
 			ret = ar0135_write_reg(ar0135, settings->reg, settings->val);
-			// printk(KERN_ALERT "-------->ar0135_set_register_array %d reg: 0x%x val 0x%x\n",i,settings->reg,settings->val);
+			//printk(KERN_ALERT "-------->ar0135_set_register_array %d reg: 0x%x val 0x%x, ret: %d\n",i,settings->reg,settings->val, ret);
 			if (ret < 0)
 				return ret;
 		}
@@ -425,6 +425,8 @@ static void set_exposure(struct v4l2_subdev *sd)
 	int ret = 0;
 	//u8 read_value = 0;
 
+	//u16 addr = 0, value = 0;
+
 	//printk(KERN_ALERT "-------->set_ae_roi calledx= 0x%x(0x%x) y=0x%x(0x%x)\n",core->ae_roi_x_start_offset,core->ae_roi_x_size, core->ae_roi_y_start_offset,core->ae_roi_y_size);
     ret = ar0135_write_reg(core, AR0135_R3140_AE_ROI_X_START_OFFSET , core->ae_roi_x_start_offset);
 	if (ret < 0)
@@ -453,15 +455,31 @@ static void set_exposure(struct v4l2_subdev *sd)
 		return ret;
 	}
 
-	/*read_value = ar0144_fpd_link_i2c_read(core->i2c_client, 0x5A, 0x0);	
-	printk(KERN_ALERT "----->set_ae_roi register read 0x5A00=0x%x\n", read_value);
+	/*addr = 0x3102;
+	value = 0;
+	ret = ar0135_read_reg(core, addr, &value);
+	printk(KERN_ALERT "0x%x value 0x%x\n", addr, value);
 
-	read_value = ar0144_fpd_link_i2c_read(core->i2c_client, 0x5A, 0x0);	
-	printk(KERN_ALERT "----->set_ae_roi register read 0x5A00=0x%x\n", read_value);
-	read_value = ar0144_fpd_link_i2c_read(core->i2c_client, 0x5A, 0x0A);	
-	printk(KERN_ALERT "----->set_ae_roi register read 0x5A0A=0x%x\n", read_value);
-	read_value = ar0144_fpd_link_i2c_read(core->i2c_client, 0x5A, 0x0B);	
-	printk(KERN_ALERT "----->set_ae_roi register read 0x5A0B=0x%x\n", read_value);*/
+	addr = 0x3152;
+	value = 0;
+	ret = ar0135_read_reg(core, addr, &value);
+	printk(KERN_ALERT "0x%x value 0x%x\n", addr, value);
+
+	addr = 0x3100;
+	value = 0;
+	ret = ar0135_read_reg(core, addr, &value);
+	printk(KERN_ALERT "0x%x value 0x%x\n", addr, value);
+
+	addr = 0x30B0;
+	value = 0;
+	ret = ar0135_read_reg(core, addr, &value);
+	printk(KERN_ALERT "0x%x value 0x%x\n", addr, value);
+
+	addr = 0x3164;
+	value = 0;
+	ret = ar0135_read_reg(core, addr, &value);
+	printk(KERN_ALERT "0x%x value 0x%x\n", addr, value);*/
+
 	return 0;
 }
 
