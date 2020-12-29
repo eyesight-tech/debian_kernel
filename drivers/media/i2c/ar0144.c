@@ -172,7 +172,7 @@ static const struct ar0144_reg_value ar0144at_auto_exposure_abba2[] = {
 	{0x3270, 0x0100}, // LED_FLASH_EN = 1
 	{0x3100, 0x0001}, // AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain enabled
 	{0x311C, 0x0048}, // AE_MAX_EXPOSURE (in rows)
-	{0x3102, 0x4650}, // AE_LUMA_TARGET
+	{0x3102, 0x5650}, // AE_LUMA_TARGET
 	{0x3108, 0x0001}, // AE_MIN_EV_STEP_REG
 	{0x310A, 0x0004}, // AE_MAX_EV_STEP_REG
 	{0x310C, 0x1008}, // AE_DAMP_OFFSET_REG
