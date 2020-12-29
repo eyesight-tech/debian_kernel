@@ -23,6 +23,7 @@
 
 #define AR0135_CID_CUSTOM_BASE  (V4L2_CID_USER_BASE | 0xf000)
 #define AR0135_CID_AE_ROI       (AR0135_CID_CUSTOM_BASE + 0)
+#define AR0135_LUMA_TARGET      (AR0135_CID_CUSTOM_BASE + 1)
 
 #define AR0135_R3012_COARSE_INTEGRATION_TIME    0x3012
 #define AR0135_R3040_READ_MODE                  0x3040
@@ -64,6 +65,7 @@ struct AR0135 {
 	unsigned ae:1;
 	u16 global_gain;
 	u16 exposure;
+	u16 luma_target;
 
 	u16 ae_roi_x_start_offset;
 	u16 ae_roi_y_start_offset;
@@ -124,7 +126,7 @@ static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
     {0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
 	{0x306E, 0x9010}, // DATAPATH_SELECT
 	{0x3102, 0x0550}, // AE_LUMA_TARGET  - change according dynamic ROI fix
-	{0x3100, 0x0001}  // AG*4 static, only integration time is variable 
+	{0x3100, 0x0011}  // AG*4 static, only integration time is variable 
 };
 
 static const struct ar0135_reg_value AR0135at_start_stream[] = {
@@ -419,12 +421,18 @@ static void set_exposure(struct v4l2_subdev *sd)
     ar0135_write_reg(core, AR0135_R3012_COARSE_INTEGRATION_TIME, core->exposure);
 }
 
+static void set_luma_target(struct v4l2_subdev *sd)
+{
+    struct AR0135 *core = to_ar0135(sd);
+
+	//printk(KERN_ALERT "-------->set_luma_target set luma target to  0x%x\n",core->luma_target);
+    ar0135_write_reg(core, AR0135_R305E_ANALOG_GAIN, core->global_gain);
+}
+
  static int set_ae_roi(struct v4l2_subdev *sd)
 {
     struct AR0135 *core = to_ar0135(sd);
 	int ret = 0;
-	//u8 read_value = 0;
-
 	//u16 addr = 0, value = 0;
 
 	//printk(KERN_ALERT "-------->set_ae_roi calledx= 0x%x(0x%x) y=0x%x(0x%x)\n",core->ae_roi_x_start_offset,core->ae_roi_x_size, core->ae_roi_y_start_offset,core->ae_roi_y_size);
@@ -454,8 +462,8 @@ static void set_exposure(struct v4l2_subdev *sd)
 		printk(KERN_ALERT "-------->set_ae_roi cannot set  AR0135_R3146_AE_ROI_Y_SIZE ret val: %d\n", ret);
 		return ret;
 	}
-
-	/*addr = 0x3102;
+#if 0
+	addr = 0x3102;
 	value = 0;
 	ret = ar0135_read_reg(core, addr, &value);
 	printk(KERN_ALERT "0x%x value 0x%x\n", addr, value);
@@ -478,8 +486,8 @@ static void set_exposure(struct v4l2_subdev *sd)
 	addr = 0x3164;
 	value = 0;
 	ret = ar0135_read_reg(core, addr, &value);
-	printk(KERN_ALERT "0x%x value 0x%x\n", addr, value);*/
-
+	printk(KERN_ALERT "0x%x value 0x%x\n", addr, value);
+#endif
 	return 0;
 }
 
@@ -542,6 +550,7 @@ static int ar0135_s_ctrl(struct v4l2_ctrl *ctrl)
 	container_of(ctrl->handler, struct AR0135, ctrls);
 	struct v4l2_subdev *sd = &core->sd;
 
+	printk(KERN_ALERT "-------->ar0135_s_ctrl called with id: 0x%x\n", ctrl->id);
 	switch (ctrl->id) {
     case V4L2_CID_EXPOSURE_AUTO:
         core->ae = (ctrl->val == V4L2_EXPOSURE_AUTO) ? 1 : 0;
@@ -572,6 +581,12 @@ static int ar0135_s_ctrl(struct v4l2_ctrl *ctrl)
         core->ae_roi_y_size = ctrl->p_cur.p_u16[3];
 		//printk(KERN_ALERT "-------->ar0135_s_ctrl ROI: Top-left=(0x%x, 0x%x) Size=(0x%x, 0x%x)\n",ctrl->p_cur.p_u16[0],ctrl->p_cur.p_u16[1], ctrl->p_cur.p_u16[2],ctrl->p_cur.p_u16[3]);
         return set_ae_roi(sd);
+	case AR0135_LUMA_TARGET:
+	    
+		core->luma_target=*(ctrl->p_cur.p_u16);
+		//printk(KERN_ALERT "-------->ar0135_s_ctrl LUMA:  0x%x\n",core->luma_target);
+		set_luma_target(sd);
+		return 0;
 	default:
 		printk(KERN_ALERT "AR0135::ar0135_s_ctrl called with invalid ID (id=%x)\n", ctrl->id);
 		return -EINVAL;
@@ -594,6 +609,18 @@ static const struct v4l2_ctrl_config AR0135_ae_roi = {
     .max = 0x1280,
     .step = 1,
     .dims = { 4 },
+};
+
+static const struct v4l2_ctrl_config AR0135_luma_target = {
+    .ops = &AR0135_ctrl_ops,
+    .id = AR0135_LUMA_TARGET,
+    .name = "AR0135 LUMA TARGET",
+    .type = V4L2_CTRL_TYPE_U16,
+    .def = 0x0,
+    .min = 0x0,
+    .max = 0xFFFF,
+    .step = 1,
+    .dims = { 1 },
 };
 
 static const struct v4l2_subdev_core_ops AR0135_core_ops = {
@@ -824,6 +851,7 @@ static int ar0135_probe(struct i2c_client *client,
 	v4l2_ctrl_new_std(&ar0135->ctrls, &AR0135_ctrl_ops,
 			  V4L2_CID_VFLIP, 0, 1, 1, 0);
 	v4l2_ctrl_new_custom(&ar0135->ctrls, &AR0135_ae_roi, NULL);
+	v4l2_ctrl_new_custom(&ar0135->ctrls, &AR0135_luma_target, NULL);
 
 	ar0135->sd.ctrl_handler = &ar0135->ctrls;
 
