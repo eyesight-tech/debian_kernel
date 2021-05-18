@@ -25,9 +25,6 @@
 #define CIPIA_CID_AE_ROI       			(CIPIA_CID_CUSTOM_BASE + 0)
 #define CIPIA_CID_LUMA_TARGET  			(CIPIA_CID_CUSTOM_BASE + 1)
 #define CIPIA_CID_FLASH					(CIPIA_CID_CUSTOM_BASE + 2)
-#define CIPIA_CID_SET_GAIN				(CIPIA_CID_CUSTOM_BASE + 3)
-#define CIPIA_CID_EN_DS_AE				(CIPIA_CID_CUSTOM_BASE + 4)
-#define CIPIA_CID_COARSE_INT_TIME		(CIPIA_CID_CUSTOM_BASE + 5)
 
 #define AR0135_R3012_COARSE_INTEGRATION_TIME    0x3012
 #define AR0135_R3040_READ_MODE                  0x3040
@@ -39,10 +36,10 @@
 #define AR0135_R3142_AE_ROI_Y_START_OFFSET      0x3142
 #define AR0135_R3144_AE_ROI_X_SIZE              0x3144
 #define AR0135_R3146_AE_ROI_Y_SIZE              0x3146
-#define AR0135_COARSE_INT_TIME					0x3164
 
 #define AR0135_EXPOSURE_DEFAULT			0x016
-#define AR0135_FALSH_ENABLE				0x0100
+#define AR0135_FLASH_ENABLE				0x0100
+#define MAX_EXPOSURE_TIME				0x0342
 
 #define AR0135_I2C_ADDR      0x10
 #define AR0135_ID_REG        0x3000
@@ -109,7 +106,7 @@ static const struct ar0135_reg_value AR0135at_1280x960_30fps[] = {
 	{0x300A, 0x05B0}, 
 	{0x300C, 0x0672},
 	//{0x30B0, 0x04A0}, // DIGITAL_TEST
-	{0x3012, 0x0122},
+	{0x3012, 	},
 	{0x30A2, 0x0001},
 	{0x30A6, 0x0001},
 	{0x3040, 0x0000}, // READ_MODE - HFLIP OFF , VFLIP 0FF
@@ -122,15 +119,15 @@ static const struct ar0135_reg_value AR0135at_embedded_data_stats[] = {
 };
 
 static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
-	{AR0135_FLASH_REG, AR0135_FALSH_ENABLE}, // LED_FLASH_EN = 1 -->should sleep for 500ms?
+	{AR0135_FLASH_REG, AR0135_FLASH_ENABLE}, // LED_FLASH_EN = 1 -->should sleep for 500ms?
 	{0x311E, 0x0002}, // AE_MIN_EXPOSURE_REG
-	{0x311C, 0x0342}, // AE_MAX_EXPOSURE_REG (in rows)
+	{0x311C, MAX_EXPOSURE_TIME}, // AE_MAX_EXPOSURE_REG (in rows)
 	{0x3108, 0x0010}, // AE_MIN_EV_STEP_REG
 	{0x310A, 0x0008}, // AE_MAX_EV_STEP_REG
 	{0x310C, 0x0200}, // AE_DAMP_OFFSET_REG
 	{0x310E, 0x0200}, // AE_DAMP_GAIN_REG
 	{0x3110, 0x0080}, // AE_DAMP_MAX_REG
-//	{0x3166, 0x0342}, // AE_AG_EXPOSURE_HI
+//	{0x3166, MAX_EXPOSURE_TIME}, // AE_AG_EXPOSURE_HI
 //	{0x3168, 0x01A3}, // AE_AG_EXPOSURE_LO
 	{0x3040, 0x0000}, // READ_MODE READ_MODE - HFLIP OFF , VFLIP 0FF
     {0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
@@ -387,10 +384,11 @@ static int ar0135_get_selection(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static void set_read_mode(struct v4l2_subdev *sd)
+static int set_read_mode(struct v4l2_subdev *sd)
 {
     struct AR0135 *core = to_ar0135(sd);
     u16 mode = 0x0000;
+	int ret = 0 ;
 
     if (core->hflip)
 	{
@@ -402,59 +400,103 @@ static void set_read_mode(struct v4l2_subdev *sd)
         mode |= 0x8000;
 	}
 
-	printk(KERN_ALERT "AR0135: set_read_mode read_mode=0x%x",mode);
-    ar0135_write_reg(core, AR0135_R3040_READ_MODE, mode);
+	//printk(KERN_ALERT "AR0135: set_read_mode read_mode=0x%x",mode);
+    ret = ar0135_write_reg(core, AR0135_R3040_READ_MODE, mode);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "set_read_mode error ret val: %d\n", ret);
+	}
+
+	return ret;
 }
 
-static void set_ae(struct v4l2_subdev *sd)
+static int set_ae(struct v4l2_subdev *sd)
 {
     struct AR0135 *core = to_ar0135(sd);
     u16 val = 0x0000;
-
+	int ret = 0;
     if (core->ae)
         val = 0x0003;
 
-	printk(KERN_ALERT "AR0135-------->set_ae to  0x%x\n",core->ae);
-    ar0135_write_reg(core, AR0135_R3100_AECTRLREG, val);
+	//printk(KERN_ALERT "AR0135-------->set_ae to  0x%x\n",core->ae);
+    ret = ar0135_write_reg(core, AR0135_R3100_AECTRLREG, val);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "set_ae error ret val: %d\n", ret);
+	}
+
+	return ret;
 }
 
-static void set_gain(struct v4l2_subdev *sd)
+static int set_gain(struct v4l2_subdev *sd)
 {
     struct AR0135 *core = to_ar0135(sd);
-	printk(KERN_ALERT "AR0135-------->set_gain to  0x%x\n",core->global_gain);
-    ar0135_write_reg(core, AR0135_R305E_ANALOG_GAIN, core->global_gain);
+	int ret = 0 ;
+
+	//printk(KERN_ALERT "AR0135-------->set_gain to  0x%x\n",core->global_gain);
+    ret = ar0135_write_reg(core, AR0135_R305E_ANALOG_GAIN, core->global_gain);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "set_gain error ret val: %d\n", ret);
+	}
+
+	return ret;
 }
 
-static void set_exposure(struct v4l2_subdev *sd)
+static int set_exposure(struct v4l2_subdev *sd)
 {
     struct AR0135 *core = to_ar0135(sd);
+	int ret = 0;
+	//printk(KERN_ALERT "AR0135-------->set_exposure to  0x%x\n",core->exposure);
+    ret = ar0135_write_reg(core, AR0135_R3012_COARSE_INTEGRATION_TIME, core->exposure);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "set_exposure error ret val: %d\n", ret);
+	}
 
-	printk(KERN_ALERT "AR0135-------->_set_exposure to  0x%x\n",core->exposure);
-    ar0135_write_reg(core, AR0135_R3012_COARSE_INTEGRATION_TIME, core->exposure);
+	return ret;
 }
 
-static void set_luma_target(struct v4l2_subdev *sd)
+static int set_luma_target(struct v4l2_subdev *sd)
 {
     struct AR0135 *core = to_ar0135(sd);
+	int ret = 0;
+	//printk(KERN_ALERT "AR0135-------->set_luma_target set luma target to  0x%x\n",core->luma_target);
+    ret = ar0135_write_reg(core, AR0135_R3100_LUMA_TARGET, core->luma_target);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "set_luma_target error ret val: %d\n", ret);
+	}
 
-	printk(KERN_ALERT "AR0135-------->set_luma_target set luma target to  0x%x\n",core->luma_target);
-    ar0135_write_reg(core, AR0135_R3100_LUMA_TARGET, core->luma_target);
+	return ret;
 }
 
-static void set_flash(struct v4l2_subdev *sd)
+static int set_flash(struct v4l2_subdev *sd)
 {
     struct AR0135 *core = to_ar0135(sd);
+	u16 val = 0x0000;
+	int ret = 0;
+	ar0135_read_reg(core, AR0135_FLASH_REG, &val);
+	//printk(KERN_ALERT "-------->set_flash read-------------------");
+	//printk(KERN_ALERT "-------->set_flash read val: 0x%x\n", val);
+	if (core->flash_enable)
+	{
+		val |= AR0135_FLASH_ENABLE;
+	}
+	else
+	{
+		val &= ~AR0135_FLASH_ENABLE;
+	}
 
-	printk(KERN_ALERT "AR0135-------->set_flash flash stats  0x%x\n",core->flash_enable);
-    ar0135_write_reg(core, AR0135_FALSH_ENABLE, core->flash_enable);
-}
-
-static void set_coarse_integration_time(struct v4l2_subdev *sd)
-{
-    struct AR0135 *core = to_ar0135(sd);
-
-	printk(KERN_ALERT "AR0135-------->set_coarse_integration_time flash stats  0x%x\n",core->coarse_integration_time);
-    ar0135_write_reg(core, AR0135_COARSE_INT_TIME, core->coarse_integration_time);
+	//printk(KERN_ALERT "-------->set_flash flash enable: 0x%x\n", core->flash_enable);
+	//printk(KERN_ALERT "-------->set_flash write val: 0x%x\n", val);
+    ret = ar0135_write_reg(core, AR0135_FLASH_REG, val);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "set_flash error ret val: %d\n", ret);
+	}
+	//printk(KERN_ALERT "------------------------------------------------");
+	return ret;
 }
 
  static int set_ae_roi(struct v4l2_subdev *sd)
@@ -463,7 +505,7 @@ static void set_coarse_integration_time(struct v4l2_subdev *sd)
 	int ret = 0;
 	//u16 addr = 0, value = 0;
 
-	printk(KERN_ALERT "AR0135-------->set_ae_roi calledx= 0x%x(0x%x) y=0x%x(0x%x)\n",core->ae_roi_x_start_offset,core->ae_roi_x_size, core->ae_roi_y_start_offset,core->ae_roi_y_size);
+	//printk(KERN_ALERT "AR0135-------->set_ae_roi calledx= 0x%x(0x%x) y=0x%x(0x%x)\n",core->ae_roi_x_start_offset,core->ae_roi_x_size, core->ae_roi_y_start_offset,core->ae_roi_y_size);
     ret = ar0135_write_reg(core, AR0135_R3140_AE_ROI_X_START_OFFSET , core->ae_roi_x_start_offset);
 	if (ret < 0)
 	{
@@ -577,68 +619,56 @@ static int ar0135_s_ctrl(struct v4l2_ctrl *ctrl)
 	struct AR0135 *core =
 	container_of(ctrl->handler, struct AR0135, ctrls);
 	struct v4l2_subdev *sd = &core->sd;
+	int ret = -EINVAL;
 
-	printk(KERN_ALERT "-------->ar0135_s_ctrl called with id: 0x%x\n", ctrl->id);
+	//printk(KERN_ALERT "-------->ar0135_s_ctrl called with id: 0x%x\n", ctrl->id);
 	switch (ctrl->id) {
     case V4L2_CID_EXPOSURE_AUTO:
         core->ae = (ctrl->val == V4L2_EXPOSURE_AUTO) ? 1 : 0;
-        //set_ae(sd);
-        return 0;
+        ret = set_ae(sd);
+        break;
 	case V4L2_CID_GAIN:
 		core->global_gain = ctrl->val;
-		set_gain(sd);
-		return 0;
+		ret = set_gain(sd);
+		break;
 	case V4L2_CID_EXPOSURE:
 		core->exposure = ctrl->val;
-		set_exposure(sd);
-		return 0;
+		//printk(KERN_ALERT "AR0135::ar0135_s_ctrl V4L2_CID_EXPOSURE 0x%x ctrl->p_new.p_u32: 0x%x\n", ctrl->val,*(ctrl->p_new.p_u32));
+		ret = set_exposure(sd);
+		break;
 	case V4L2_CID_HFLIP:
 		core->hflip = ctrl->val;
-		printk(KERN_ALERT "AR0135::ar0135_s_ctrl V4L2_CID_HFLIP 0x%x\n", core->hflip);
-		set_read_mode(sd);
-		return 0;
+		//printk(KERN_ALERT "AR0135::ar0135_s_ctrl V4L2_CID_HFLIP 0x%x\n", core->hflip);
+		ret = set_read_mode(sd);
+		break;
 	case V4L2_CID_VFLIP:
 		core->vflip = ctrl->val;
-		printk(KERN_ALERT "AR0135::ar0135_s_ctrl V4L2_CID_VFLIP 0x%x\n", core->hflip);
-		set_read_mode(sd);
-		return 0;
+		//printk(KERN_ALERT "AR0135::ar0135_s_ctrl V4L2_CID_VFLIP 0x%x\n", core->hflip);
+		ret = set_read_mode(sd);
+		break;
     case CIPIA_CID_AE_ROI:
-        core->ae_roi_x_start_offset = ctrl->p_cur.p_u16[0];
-        core->ae_roi_y_start_offset = ctrl->p_cur.p_u16[1];
-        core->ae_roi_x_size = ctrl->p_cur.p_u16[2];
-        core->ae_roi_y_size = ctrl->p_cur.p_u16[3];
-		printk(KERN_ALERT "-------->ar0135_s_ctrl ROI: Top-left=(0x%x, 0x%x) Size=(0x%x, 0x%x)\n",ctrl->p_cur.p_u16[0],ctrl->p_cur.p_u16[1], ctrl->p_cur.p_u16[2],ctrl->p_cur.p_u16[3]);
-        return set_ae_roi(sd);
+        core->ae_roi_x_start_offset = ctrl->p_new.p_u16[0];
+        core->ae_roi_y_start_offset = ctrl->p_new.p_u16[1];
+        core->ae_roi_x_size = ctrl->p_new.p_u16[2];
+        core->ae_roi_y_size = ctrl->p_new.p_u16[3];
+		//printk(KERN_ALERT "-------->ar0135_s_ctrl ROI: Top-left=(0x%x, 0x%x) Size=(0x%x, 0x%x)\n",ctrl->p_cur.p_u16[0],ctrl->p_cur.p_u16[1], ctrl->p_cur.p_u16[2],ctrl->p_cur.p_u16[3]);
+        ret = set_ae_roi(sd);
+		break;
 	case CIPIA_CID_LUMA_TARGET:    
-		core->luma_target=*(ctrl->p_cur.p_u16);
-		printk(KERN_ALERT "-------->ar0135_s_ctrl LUMA:  0x%x\n",core->luma_target);
-		set_luma_target(sd);
-		return 0;
+		core->luma_target=*(ctrl->p_new.p_u16);
+		//printk(KERN_ALERT "-------->ar0135_s_ctrl LUMA:  0x%x\n",core->luma_target);
+		ret = set_luma_target(sd);
+		break;
 	case CIPIA_CID_FLASH:
-		core->flash_enable=*(ctrl->p_cur.p_u8);
-		printk(KERN_ALERT "-------->ar0135_s_ctrl FLASH:  0x%x\n",core->flash_enable);
-		set_flash(sd);
-		return 0;
-	case CIPIA_CID_SET_GAIN:
-		core->global_gain = *(ctrl->p_cur.p_u16);
-		printk(KERN_ALERT "-------->ar0135_s_ctrl GAIN:  0x%x\n",core->global_gain);
-		set_gain(sd);
-		return 0;
-	case CIPIA_CID_COARSE_INT_TIME:
-		core->coarse_integration_time = *(ctrl->p_cur.p_u32);
-		printk(KERN_ALERT "-------->ar0135_s_ctrl INTEGRATION TIME:  0x%x\n", core->coarse_integration_time);
-		set_coarse_integration_time(sd);
-		return 0;
-	case CIPIA_CID_EN_DS_AE:
-        core->ae = (ctrl->val == V4L2_EXPOSURE_AUTO) ? 1 : 0;
-        set_ae(sd);
-        return 0;
+		core->flash_enable=*(ctrl->p_new.p_u8);
+		//printk(KERN_ALERT "-------->ar0135_s_ctrl FLASH:  0x%x\n",core->flash_enable);
+		ret = set_flash(sd);
+		break;
 	default:
 		printk(KERN_ALERT "AR0135::ar0135_s_ctrl called with invalid ID (id=%x)\n", ctrl->id);
-		return -EINVAL;
 	}
 
- 	return 0;
+ 	return ret;
 }
 
 static const struct v4l2_ctrl_ops AR0135_ctrl_ops = {
@@ -676,43 +706,7 @@ static const struct v4l2_ctrl_config cipia_flash = {
     .type = V4L2_CTRL_TYPE_U8,
     .def = 0x0,
     .min = 0x0,
-    .max = 0xFFFF,
-    .step = 1,
-    .dims = { 1 },
-};
-
-static const struct v4l2_ctrl_config cipia_analog_gain = {
-    .ops = &AR0135_ctrl_ops,
-    .id = CIPIA_CID_SET_GAIN,
-    .name = "CIPIA ANALOG GAIN",
-    .type = V4L2_CTRL_TYPE_U16,
-    .def = 0x0,
-    .min = 0x0,
-    .max = 0xFFFF,
-    .step = 1,
-    .dims = { 1 },
-};
-
-static const struct v4l2_ctrl_config cipia_es_ds_ae = {
-    .ops = &AR0135_ctrl_ops,
-    .id = CIPIA_CID_EN_DS_AE,
-    .name = "CIPIA ENABLE DISABLE AE",
-    .type = V4L2_CTRL_TYPE_U16,
-    .def = 0x0,
-    .min = 0x0,
-    .max = 0xFFFF,
-    .step = 1,
-    .dims = { 1 },
-};
-
-static const struct v4l2_ctrl_config cipia_set_coarse_int_time = {
-    .ops = &AR0135_ctrl_ops,
-    .id = CIPIA_CID_COARSE_INT_TIME,
-    .name = "CIPIA SET CORASE_INTEGRATION TIME",
-    .type = V4L2_CTRL_TYPE_U32,
-    .def = 0x0,
-    .min = 0x0,
-    .max = 0xFFFF,
+    .max = 0xFF,
     .step = 1,
     .dims = { 1 },
 };
@@ -938,7 +932,7 @@ static int ar0135_probe(struct i2c_client *client,
 	v4l2_ctrl_new_std(&ar0135->ctrls, &AR0135_ctrl_ops,
 			  V4L2_CID_GAIN, 0, 0x40, 1, 0x0E);
 	v4l2_ctrl_new_std(&ar0135->ctrls, &AR0135_ctrl_ops,
-			  V4L2_CID_EXPOSURE, 0, 0x01CF, 1, AR0135_EXPOSURE_DEFAULT);
+			  V4L2_CID_EXPOSURE, 0, MAX_EXPOSURE_TIME	, 1, AR0135_EXPOSURE_DEFAULT);
 	ar0135->exposure = AR0135_EXPOSURE_DEFAULT;
 	v4l2_ctrl_new_std(&ar0135->ctrls, &AR0135_ctrl_ops,
 			  V4L2_CID_HFLIP, 0, 1, 1, 0);
@@ -947,10 +941,7 @@ static int ar0135_probe(struct i2c_client *client,
 	v4l2_ctrl_new_custom(&ar0135->ctrls, &cipia_ae_roi, NULL);
 	v4l2_ctrl_new_custom(&ar0135->ctrls, &cipia_luma_target, NULL);
 	v4l2_ctrl_new_custom(&ar0135->ctrls, &cipia_flash, NULL);
-	v4l2_ctrl_new_custom(&ar0135->ctrls, &cipia_analog_gain, NULL);
-	v4l2_ctrl_new_custom(&ar0135->ctrls, &cipia_es_ds_ae, NULL);
-	v4l2_ctrl_new_custom(&ar0135->ctrls, &cipia_set_coarse_int_time, NULL);
-
+	
 	ar0135->sd.ctrl_handler = &ar0135->ctrls;
 
 	v4l2_i2c_subdev_init(&ar0135->sd, client, &AR0135_subdev_ops);
