@@ -98,7 +98,7 @@ static const struct ar0135_reg_value ar0135at_recommended_setting[] = {
 	{0x302C, 0x0002}, // VT_SYS_CLK_DIV
 	{0x302E, 0x0002}, // PRE_PLL_CLK_DIV
 	{0x3030, 0x0030}, // PLL_MULTIPLIER
-	{0x30B0, 0x0480}, // DIGITAL_TEST    
+	{0x30B0, 0x00A0}, // DIGITAL_TEST    
 };
 
 static const struct ar0135_reg_value AR0135at_1280x960_30fps[] = {
@@ -109,7 +109,7 @@ static const struct ar0135_reg_value AR0135at_1280x960_30fps[] = {
 	{0x300A, 0x05B0}, 
 	{0x300C, 0x0672},
 	//{0x30B0, 0x04A0}, // DIGITAL_TEST
-	{0x3012, 0x0122},
+	{0x3012, 0x0020},
 	{0x30A2, 0x0001},
 	{0x30A6, 0x0001},
 	{0x3040, 0x0000}, // READ_MODE - HFLIP OFF , VFLIP 0FF
@@ -124,7 +124,7 @@ static const struct ar0135_reg_value AR0135at_embedded_data_stats[] = {
 static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
 	{AR0135_FLASH_REG, AR0135_FALSH_ENABLE}, // LED_FLASH_EN = 1 -->should sleep for 500ms?
 	{0x311E, 0x0002}, // AE_MIN_EXPOSURE_REG
-	{0x311C, 0x0342}, // AE_MAX_EXPOSURE_REG (in rows)
+	{0x311C, 0x005b}, // AE_MAX_EXPOSURE_REG (in rows)
 	{0x3108, 0x0010}, // AE_MIN_EV_STEP_REG
 	{0x310A, 0x0008}, // AE_MAX_EV_STEP_REG
 	{0x310C, 0x0200}, // AE_DAMP_OFFSET_REG
@@ -136,7 +136,7 @@ static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
     {0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
 	{0x306E, 0x9010}, // DATAPATH_SELECT
 	{AR0135_R3100_LUMA_TARGET, 0x0550}, // AE_LUMA_TARGET  - change according dynamic ROI fix
-	{0x3100, 0x0011}  // AG*4 static, only integration time is variable 
+	{0x3100, 0x0001}  // AG*4 static, only integration time is variable 
 };
 
 static const struct ar0135_reg_value AR0135at_start_stream[] = {
@@ -414,7 +414,7 @@ static void set_ae(struct v4l2_subdev *sd)
     if (core->ae)
         val = 0x0003;
 
-	printk(KERN_ALERT "AR0135-------->set_ae to  0x%x\n",core->ae);
+	//printk(KERN_ALERT "AR0135-------->set_ae to  0x%x\n",core->ae);
     ar0135_write_reg(core, AR0135_R3100_AECTRLREG, val);
 }
 
@@ -463,7 +463,7 @@ static void set_coarse_integration_time(struct v4l2_subdev *sd)
 	int ret = 0;
 	//u16 addr = 0, value = 0;
 
-	printk(KERN_ALERT "AR0135-------->set_ae_roi calledx= 0x%x(0x%x) y=0x%x(0x%x)\n",core->ae_roi_x_start_offset,core->ae_roi_x_size, core->ae_roi_y_start_offset,core->ae_roi_y_size);
+	//printk(KERN_ALERT "AR0135-------->set_ae_roi calledx= 0x%x(0x%x) y=0x%x(0x%x)\n",core->ae_roi_x_start_offset,core->ae_roi_x_size, core->ae_roi_y_start_offset,core->ae_roi_y_size);
     ret = ar0135_write_reg(core, AR0135_R3140_AE_ROI_X_START_OFFSET , core->ae_roi_x_start_offset);
 	if (ret < 0)
 	{
@@ -578,7 +578,7 @@ static int ar0135_s_ctrl(struct v4l2_ctrl *ctrl)
 	container_of(ctrl->handler, struct AR0135, ctrls);
 	struct v4l2_subdev *sd = &core->sd;
 
-	printk(KERN_ALERT "-------->ar0135_s_ctrl called with id: 0x%x\n", ctrl->id);
+	//printk(KERN_ALERT "-------->ar0135_s_ctrl called with id: 0x%x\n", ctrl->id);
 	switch (ctrl->id) {
     case V4L2_CID_EXPOSURE_AUTO:
         core->ae = (ctrl->val == V4L2_EXPOSURE_AUTO) ? 1 : 0;
@@ -607,7 +607,7 @@ static int ar0135_s_ctrl(struct v4l2_ctrl *ctrl)
         core->ae_roi_y_start_offset = ctrl->p_cur.p_u16[1];
         core->ae_roi_x_size = ctrl->p_cur.p_u16[2];
         core->ae_roi_y_size = ctrl->p_cur.p_u16[3];
-		printk(KERN_ALERT "-------->ar0135_s_ctrl ROI: Top-left=(0x%x, 0x%x) Size=(0x%x, 0x%x)\n",ctrl->p_cur.p_u16[0],ctrl->p_cur.p_u16[1], ctrl->p_cur.p_u16[2],ctrl->p_cur.p_u16[3]);
+		//printk(KERN_ALERT "-------->ar0135_s_ctrl ROI: Top-left=(0x%x, 0x%x) Size=(0x%x, 0x%x)\n",ctrl->p_cur.p_u16[0],ctrl->p_cur.p_u16[1], ctrl->p_cur.p_u16[2],ctrl->p_cur.p_u16[3]);
         return set_ae_roi(sd);
 	case CIPIA_CID_LUMA_TARGET:    
 		core->luma_target=*(ctrl->p_cur.p_u16);
@@ -883,7 +883,7 @@ static int ar0135_probe(struct i2c_client *client,
 	ar0135->i2c_client = client;
 	ar0135->dev = dev;
 	mutex_init(&ar0135->lock);
-	dev_info(dev, "AR0135 camera detected\n");
+	dev_info(dev, "AR0135 RPV camera detected\n");
 
 	// default values //
 	ar0135->ae = 1;
@@ -971,7 +971,7 @@ static int ar0135_probe(struct i2c_client *client,
 		goto free_entity;
 	}
 
-	dev_info(dev, "AR0135 detected at address 0x%02x\n", client->addr);
+	dev_info(dev, "AR0135 RPV detected at address 0x%02x\n", client->addr);
 
 	ret = v4l2_async_register_subdev(&ar0135->sd);
 	if (ret < 0) {
