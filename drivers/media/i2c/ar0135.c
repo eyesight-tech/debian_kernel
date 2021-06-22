@@ -29,6 +29,7 @@
 #define AR0135_R3012_COARSE_INTEGRATION_TIME    0x3012
 #define AR0135_R3040_READ_MODE                  0x3040
 #define AR0135_FLASH_REG						0x3046
+#define AR0135_DIGITAL_TEST						0x30B0
 #define AR0135_R305E_ANALOG_GAIN                0x305E
 #define AR0135_R3100_AECTRLREG                  0x3100
 #define AR0135_R3100_LUMA_TARGET				0x3102
@@ -44,6 +45,7 @@
 #define AR0135_I2C_ADDR      0x10
 #define AR0135_ID_REG        0x3000
 #define AR0135_ID_VAL        0x0554
+#define AR0135_ANALOG_GAIN_BIT 0x3
 
 struct ar0135_reg_value {
 	u16 reg;
@@ -425,6 +427,8 @@ static int set_ae(struct v4l2_subdev *sd)
 		printk(KERN_ALERT "set_ae error ret val: %d\n", ret);
 	}
 
+	ar0135_read_reg(core, AR0135_R3100_AECTRLREG, &val);
+	//printk(KERN_ALERT "-------->set_ae read val: 0x%x\n", val);
 	return ret;
 }
 
@@ -432,14 +436,25 @@ static int set_gain(struct v4l2_subdev *sd)
 {
     struct AR0135 *core = to_ar0135(sd);
 	int ret = 0 ;
-
-	//printk(KERN_ALERT "AR0135-------->set_gain to  0x%x\n",core->global_gain);
-    ret = ar0135_write_reg(core, AR0135_R305E_ANALOG_GAIN, core->global_gain);
+	u16 mask = 0xFFE7;
+	u16 old_val = 0;
+	u16 new_val = 0;
+	u16 shifted_val = 0;
+	printk(KERN_ALERT "AR0135-------->set_gain-------------\n");
+	shifted_val = (core->global_gain << AR0135_ANALOG_GAIN_BIT);
+	ar0135_read_reg(core, AR0135_DIGITAL_TEST, &old_val);
+	printk(KERN_ALERT "AR0135-------->set_gain old value 0x%x\n",old_val);
+	new_val = (old_val&mask)|shifted_val;
+	printk(KERN_ALERT "AR0135-------->set_gain global_gain: 0x%x shifted 0x%x write: 0x%x\n",core->global_gain, shifted_val, new_val);
+    ret = ar0135_write_reg(core, AR0135_DIGITAL_TEST, new_val);
 	if (ret < 0)
 	{
 		printk(KERN_ALERT "set_gain error ret val: %d\n", ret);
 	}
 
+	ar0135_read_reg(core, AR0135_DIGITAL_TEST, &old_val);
+	printk(KERN_ALERT "-------->set_gain read val: 0x%x\n", old_val);
+	printk(KERN_ALERT "AR0135---------------------\n");
 	return ret;
 }
 
@@ -447,13 +462,17 @@ static int set_exposure(struct v4l2_subdev *sd)
 {
     struct AR0135 *core = to_ar0135(sd);
 	int ret = 0;
-	//printk(KERN_ALERT "AR0135-------->set_exposure to  0x%x\n",core->exposure);
+	u16 val;
+
+	printk(KERN_ALERT "AR0135-------->set_exposure to  0x%x\n",core->exposure);
     ret = ar0135_write_reg(core, AR0135_R3012_COARSE_INTEGRATION_TIME, core->exposure);
 	if (ret < 0)
 	{
 		printk(KERN_ALERT "set_exposure error ret val: %d\n", ret);
 	}
 
+	ar0135_read_reg(core, AR0135_R3012_COARSE_INTEGRATION_TIME, &val);
+	printk(KERN_ALERT "-------->set_exposure read val: 0x%x\n", val);
 	return ret;
 }
 
@@ -461,6 +480,8 @@ static int set_luma_target(struct v4l2_subdev *sd)
 {
     struct AR0135 *core = to_ar0135(sd);
 	int ret = 0;
+	//u16 val;
+
 	//printk(KERN_ALERT "AR0135-------->set_luma_target set luma target to  0x%x\n",core->luma_target);
     ret = ar0135_write_reg(core, AR0135_R3100_LUMA_TARGET, core->luma_target);
 	if (ret < 0)
@@ -468,6 +489,8 @@ static int set_luma_target(struct v4l2_subdev *sd)
 		printk(KERN_ALERT "set_luma_target error ret val: %d\n", ret);
 	}
 
+	//ar0135_read_reg(core, AR0135_R3012_COARSE_INTEGRATION_TIME, &val);
+	//printk(KERN_ALERT "-------->set_luma_target read val: 0x%x\n", val);
 	return ret;
 }
 
@@ -495,6 +518,9 @@ static int set_flash(struct v4l2_subdev *sd)
 	{
 		printk(KERN_ALERT "set_flash error ret val: %d\n", ret);
 	}
+
+	//ar0135_read_reg(core, AR0135_FLASH_REG, &val);
+	//printk(KERN_ALERT "-------->set_flash read val: 0x%x\n", val);
 	//printk(KERN_ALERT "------------------------------------------------");
 	return ret;
 }
@@ -877,7 +903,7 @@ static int ar0135_probe(struct i2c_client *client,
 	ar0135->i2c_client = client;
 	ar0135->dev = dev;
 	mutex_init(&ar0135->lock);
-	dev_info(dev, "AR0135 camera detected\n");
+	dev_info(dev, "AR0135 camera detected version 1.14.1\n");
 
 	// default values //
 	ar0135->ae = 1;
