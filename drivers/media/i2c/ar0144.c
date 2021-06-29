@@ -25,9 +25,6 @@
 #define CIPIA_CID_AE_ROI       			(CIPIA_CID_CUSTOM_BASE + 0)
 #define CIPIA_CID_LUMA_TARGET   		(CIPIA_CID_CUSTOM_BASE + 1)
 #define CIPIA_CID_FLASH					(CIPIA_CID_CUSTOM_BASE + 2)
-#define CIPIA_CID_SET_GAIN				(CIPIA_CID_CUSTOM_BASE + 3)
-#define CIPIA_CID_EN_DS_AE				(CIPIA_CID_CUSTOM_BASE + 4)
-#define CIPIA_CID_COARSE_INT_TIME		(CIPIA_CID_CUSTOM_BASE + 5)
 
 #define AR0144_R3012_COARSE_INTEGRATION_TIME    0x3012
 #define AR0144_R301D_IMAGE_ORIENTATION          0x301D
@@ -35,7 +32,7 @@
 #define AR0144_R3060_ANALOG_GAIN                0x3060
 #define AR0144_R3100_AECTRLREG                  0x3100
 #define AR0144_R3100_LUMA_TARGET                0x3102
-#define AR0144_FALSH_ENABLE						0x3270
+#define AR0144_R3100_FLASH						0x3270
 #define AR0144_R3140_AE_ROI_X_START_OFFSET      0x3140
 #define AR0144_R3142_AE_ROI_Y_START_OFFSET      0x3142
 #define AR0144_R3144_AE_ROI_X_SIZE              0x3144
@@ -43,6 +40,7 @@
 #define AR0144_COARSE_INT_TIME					0x3016
 
 #define AR0144_EXPOSURE_DEFAULT			0x0160
+#define AR0144_FLASH_ENABLE				0x0100		
 
 #define AR0144_I2C_ADDR      0x10
 #define AR0144_ID_REG        0x3000
@@ -168,29 +166,29 @@ static const struct ar0144_reg_value ar0144at_embedded_data_stats[] = {
 };
 
 static const struct ar0144_reg_value ar0144at_auto_exposure[] = {
-	{0x3270, 0x0100}, // LED_FLASH_EN = 1
-	{0x3100, 0x0003}, // AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain disabled
-	{0x311C, 0x0160}, // AE_MAX_EXPOSURE (in rows)
-	{AR0144_R3100_LUMA_TARGET, 0x5650}, // AE_LUMA_TARGET
-	{0x3108, 0x0008}, // AE_MIN_EV_STEP_REG
-	{0x310A, 0x0902}, // AE_MAX_EV_STEP_REG
-	{0x310C, 0x1008}, // AE_DAMP_OFFSET_REG
-	{0x310E, 0x1010}, // AE_DAMP_GAIN_REG
-	{0x3110, 0x0048}, // AE_DAMP_MAX_REG
+	{AR0144_R3100_FLASH			, AR0144_FLASH_ENABLE}, // LED_FLASH_EN = 1
+	{0x3100						, 0x0003}, 				// AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain disabled
+	{0x311C						, 0x0160}, 				// AE_MAX_EXPOSURE (in rows)
+	{AR0144_R3100_LUMA_TARGET	, 0x5650}, 				// AE_LUMA_TARGET
+	{0x3108						, 0x0008}, 				// AE_MIN_EV_STEP_REG
+	{0x310A						, 0x0902}, 				// AE_MAX_EV_STEP_REG
+	{0x310C						, 0x1008}, 				// AE_DAMP_OFFSET_REG
+	{0x310E						, 0x1010}, 				// AE_DAMP_GAIN_REG
+	{0x3110						, 0x0048}, 				// AE_DAMP_MAX_REG
 };
 
 static const struct ar0144_reg_value ar0144at_auto_exposure_abba2[] = {
-	{0x3270, 0x0100}, // LED_FLASH_EN = 1
-	{0x3100, 0x0001}, // AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain enabled
-	{0x311C, 0x0048}, // AE_MAX_EXPOSURE (in rows)
-	{AR0144_R3100_LUMA_TARGET, 0x5650}, // AE_LUMA_TARGET
-	{0x3108, 0x0001}, // AE_MIN_EV_STEP_REG
-	{0x310A, 0x0004}, // AE_MAX_EV_STEP_REG
-	{0x310C, 0x1008}, // AE_DAMP_OFFSET_REG
-	{0x310E, 0x1010}, // AE_DAMP_GAIN_REG
-	{0x3110, 0x0060}, // AE_DAMP_MAX_REG
-	{0x3166, 0x0048}, // AE_AG_EXPOSURE_HIGH
-	{0x311E, 0x0005}  // AE_MIN_EXPOSURE_REG
+	{AR0144_R3100_FLASH			, AR0144_FLASH_ENABLE}, // LED_FLASH_EN = 1
+	{0x3100						, 0x0001}, 				// AE_ENABLE=1; AUTO_AG_EN=1 (Analog gain); Digital gain enabled
+	{0x311C						, 0x0048}, 				// AE_MAX_EXPOSURE (in rows)
+	{AR0144_R3100_LUMA_TARGET	, 0x5650}, 				// AE_LUMA_TARGET
+	{0x3108						, 0x0001}, 				// AE_MIN_EV_STEP_REG
+	{0x310A						, 0x0004}, 				// AE_MAX_EV_STEP_REG
+	{0x310C						, 0x1008}, 				// AE_DAMP_OFFSET_REG
+	{0x310E						, 0x1010}, 				// AE_DAMP_GAIN_REG
+	{0x3110						, 0x0060}, 				// AE_DAMP_MAX_REG
+	{0x3166						, 0x0048}, 				// AE_AG_EXPOSURE_HIGH
+	{0x311E						, 0x0005}  				// AE_MIN_EXPOSURE_REG
 };
 
 static const struct ar0144_reg_value ar0144at_start_stream[] = {
@@ -485,10 +483,11 @@ static int ar0144_get_selection(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static void set_read_mode(struct v4l2_subdev *sd)
+static int set_read_mode(struct v4l2_subdev *sd)
 {
     struct ar0144 *core = to_ar0144(sd);
     u8 mode = 0x00;
+	int ret = 0 ;
 
     if (core->hflip)
         mode |= 0x01;
@@ -496,27 +495,50 @@ static void set_read_mode(struct v4l2_subdev *sd)
     if (core->vflip)
         mode |= 0x02;
 
-    ar0144_write_reg8(core, AR0144_R301D_IMAGE_ORIENTATION, mode);
+    ret = ar0144_write_reg8(core, AR0144_R301D_IMAGE_ORIENTATION, mode);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_read_mode error ret val: %d\n", ret);
+	}
+
+	return ret;
 }
 
-static void set_ae(struct v4l2_subdev *sd)
+
+static int set_ae(struct v4l2_subdev *sd)
 {
     struct ar0144 *core = to_ar0144(sd);
     u16 val = 0x01;
+	int ret = 0;
 
     if (core->ae)
         val = 0x03;
 
 	printk(KERN_ALERT "-------->set_ae to  0x%x\n",core->ae);
-    ar0144_write_reg(core, AR0144_R3100_AECTRLREG, val);
+    ret = ar0144_write_reg(core, AR0144_R3100_AECTRLREG, val);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_ae error ret val: %d\n", ret);
+	}
+
+	return ret;
 }
 
- static void set_gain(struct v4l2_subdev *sd)
+ static int set_gain(struct v4l2_subdev *sd)
 {
     struct ar0144 *core = to_ar0144(sd);
+	int ret = 0 ;
+
 	printk(KERN_ALERT "-------->set_gain to  0x%x\n",core->global_gain);
-	ar0144_write_reg(core, AR0144_R3060_ANALOG_GAIN, core->global_gain);
+	ret = ar0144_write_reg(core, AR0144_R3060_ANALOG_GAIN, core->global_gain);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_gain error ret val: %d\n", ret);
+	}
+
+	return ret;
 }
+
 #ifdef DEBUG
 static void print_values(const char *msg, struct v4l2_subdev *sd)
 {
@@ -527,47 +549,94 @@ static void print_values(const char *msg, struct v4l2_subdev *sd)
 	printk(KERN_ALERT "%s ar0144 gain :  0x%x=0x%x\n", msg, AR0144_R3060_ANALOG_GAIN, val);
 }
 #endif
- static void set_exposure(struct v4l2_subdev *sd)
+ static int set_exposure(struct v4l2_subdev *sd)
 {
     struct ar0144 *core = to_ar0144(sd);
-
+	int ret = 0;
 	printk(KERN_ALERT "AR0144-------->_set_exposure to  0x%x\n",core->exposure);
-    ar0144_write_reg(core, AR0144_R3012_COARSE_INTEGRATION_TIME, core->exposure);
+    ret = ar0144_write_reg(core, AR0144_R3012_COARSE_INTEGRATION_TIME, core->exposure);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_exposure error ret val: %d\n", ret);
+	}
+
+	return ret;
 }
 
-static void set_luma_target(struct v4l2_subdev *sd)
+static int set_luma_target(struct v4l2_subdev *sd)
 {
     struct ar0144 *core = to_ar0144(sd);
+	int ret = 0;
 
 	printk(KERN_ALERT "AR0144-------->set_luma_target set luma target to  0x%x\n",core->luma_target);
-    ar0144_write_reg(core, AR0144_R3100_LUMA_TARGET, core->luma_target);
+    ret = ar0144_write_reg(core, AR0144_R3100_LUMA_TARGET, core->luma_target);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "set_luma_target error ret val: %d\n", ret);
+	}
+
+	return ret;
 }
 
-static void set_flash(struct v4l2_subdev *sd)
+static int set_flash(struct v4l2_subdev *sd)
 {
     struct ar0144 *core = to_ar0144(sd);
+	u16 val = 0x0000;
+	int ret = 0;
+	ar0144_read_reg(core, AR0144_FLASH_ENABLE, &val);
+	if (core->flash_enable)
+	{
+		val |= AR0144_R3100_FLASH;
+	}
+	else
+	{
+		val &= ~AR0144_R3100_FLASH;
+	}
 
 	printk(KERN_ALERT "AR0144-------->set_flash flash stats  0x%x\n",core->luma_target);
-    ar0144_write_reg(core, AR0144_FALSH_ENABLE, core->flash_enable);
+    ret = ar0144_write_reg(core, AR0144_FLASH_ENABLE, val);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_flash error ret val: %d\n", ret);
+	}
+	return ret;
 }
 
-static void set_coarse_integration_time(struct v4l2_subdev *sd)
+static int set_ae_roi(struct v4l2_subdev *sd)
 {
     struct ar0144 *core = to_ar0144(sd);
-
-	printk(KERN_ALERT "AR0144-------->set_coarse_integration_time  0x%x\n",core->coarse_integration_time);
-    ar0144_write_reg(core, AR0144_COARSE_INT_TIME, core->coarse_integration_time);
-}
-
- static void set_ae_roi(struct v4l2_subdev *sd)
-{
-    struct ar0144 *core = to_ar0144(sd);
+	int ret = 0;
 
 	printk(KERN_ALERT "AR0144-------->set_ae_roi calledx= 0x%x(0x%x) y=0x%x(0x%x)\n",core->ae_roi_x_start_offset,core->ae_roi_x_size, core->ae_roi_y_start_offset,core->ae_roi_y_size);
-    ar0144_write_reg(core, AR0144_R3140_AE_ROI_X_START_OFFSET , core->ae_roi_x_start_offset);
-    ar0144_write_reg(core, AR0144_R3142_AE_ROI_Y_START_OFFSET, core->ae_roi_y_start_offset);
-    ar0144_write_reg(core, AR0144_R3144_AE_ROI_X_SIZE, core->ae_roi_x_size);
-    ar0144_write_reg(core, AR0144_R3146_AE_ROI_Y_SIZE, core->ae_roi_y_size);
+    ret = ar0144_write_reg(core, AR0144_R3140_AE_ROI_X_START_OFFSET , core->ae_roi_x_start_offset);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_ae_roi cannot set  AR0135_R3140_AE_ROI_X_START_OFFSET ret val: %d\n", ret);
+		return ret;
+	}
+
+    ret = ar0144_write_reg(core, AR0144_R3142_AE_ROI_Y_START_OFFSET, core->ae_roi_y_start_offset);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_ae_roi cannot set  AR0135_R3142_AE_ROI_Y_START_OFFSET ret val: %d\n", ret);
+		return ret;
+	}
+
+    ret = ar0144_write_reg(core, AR0144_R3144_AE_ROI_X_SIZE, core->ae_roi_x_size);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_ae_roi cannot set  AR0135_R3144_AE_ROI_X_SIZE ret val: %d\n", ret);
+		return ret;
+	}
+
+    ret = ar0144_write_reg(core, AR0144_R3146_AE_ROI_Y_SIZE, core->ae_roi_y_size);
+	if (ret < 0)
+	{
+		printk(KERN_ALERT "-------->set_ae_roi cannot set  AR0135_R3146_AE_ROI_Y_SIZE ret val: %d\n", ret);
+		return ret;
+	}
+
+	return 0;
 }
 
 static int ar0144_s_stream(struct v4l2_subdev *subdev, int enable)
@@ -646,56 +715,50 @@ static int ar0144_s_ctrl(struct v4l2_ctrl *ctrl)
 	struct ar0144 *core =
 		container_of(ctrl->handler, struct ar0144, ctrls);
 	struct v4l2_subdev *sd = &core->sd;
+	int ret = -EINVAL;
 
  	switch (ctrl->id) {
     case V4L2_CID_EXPOSURE_AUTO:
         core->ae = (ctrl->val == V4L2_EXPOSURE_AUTO) ? 1 : 0;
+		ret = set_ae(sd);
         break;
 	case V4L2_CID_GAIN:
 		core->global_gain = ctrl->val;
+		ret = set_gain(sd);
 		break;
 	case V4L2_CID_EXPOSURE:
 		core->exposure = ctrl->val;
+		ret = set_exposure(sd);
 		break;
 	case V4L2_CID_HFLIP:
 		core->hflip = ctrl->val;
-		return 0;
+		ret = set_read_mode(sd);
+		break;
 	case V4L2_CID_VFLIP:
 		core->vflip = ctrl->val;
-		return 0;
+		ret = set_read_mode(sd);
+		break;
     case CIPIA_CID_AE_ROI:
         core->ae_roi_x_start_offset = ctrl->p_cur.p_u16[0];
         core->ae_roi_y_start_offset = ctrl->p_cur.p_u16[1];
         core->ae_roi_x_size = ctrl->p_cur.p_u16[2];
         core->ae_roi_y_size = ctrl->p_cur.p_u16[3];
-        set_ae_roi(sd);
-        return 0;
+        ret = set_ae_roi(sd);
+        break;
 	case CIPIA_CID_LUMA_TARGET:    
 		core->luma_target=*(ctrl->p_cur.p_u16);
 		//printk(KERN_ALERT "-------->ar0144_s_ctrl LUMA:  0x%x\n",core->luma_target);
-		set_luma_target(sd);
-		return 0;
+		ret = set_luma_target(sd);
+		break;
 	case CIPIA_CID_FLASH:
 		core->flash_enable=*(ctrl->p_cur.p_u8);
-		set_flash(sd);
-		return 0;
-	case CIPIA_CID_SET_GAIN:
-		core->global_gain=*(ctrl->p_cur.p_u16);
-		set_gain(sd);
-		return 0;
-	case CIPIA_CID_EN_DS_AE:
-		core->ae=*(ctrl->p_cur.p_u16);
-		set_ae(sd); 
-		return 0;
-	case CIPIA_CID_COARSE_INT_TIME:
-		core->coarse_integration_time = core->ae=*(ctrl->p_cur.p_u32);
-		set_coarse_integration_time(sd);
-		return 0;
+		ret = set_flash(sd);
+		break;
 	default:
 		return -EINVAL;
 	}
 
- 	return 0;
+ 	return ret;
 }
 
 static const struct v4l2_ctrl_ops ar0144_ctrl_ops = {
@@ -731,42 +794,6 @@ static const struct v4l2_ctrl_config cipia_flash = {
     .id = CIPIA_CID_FLASH,
     .name = "CIPIA FLASH SET",
     .type = V4L2_CTRL_TYPE_U8,
-    .def = 0x0,
-    .min = 0x0,
-    .max = 0xFFFF,
-    .step = 1,
-    .dims = { 1 },
-};
-
-static const struct v4l2_ctrl_config cipia_analog_gain = {
-    .ops = &ar0144_ctrl_ops,
-    .id = CIPIA_CID_SET_GAIN,
-    .name = "CIPIA FLASH SET",
-    .type = V4L2_CTRL_TYPE_U16,
-    .def = 0x0,
-    .min = 0x0,
-    .max = 0xFFFF,
-    .step = 1,
-    .dims = { 1 },
-};
-
-static const struct v4l2_ctrl_config cipia_en_ds_ae = {
-    .ops = &ar0144_ctrl_ops,
-    .id = CIPIA_CID_EN_DS_AE,
-    .name = "CIPIA EANBLE DISABLE AUTO EXPOSURE",
-    .type = V4L2_CTRL_TYPE_U16,
-    .def = 0x0,
-    .min = 0x0,
-    .max = 0xFFFF,
-    .step = 1,
-    .dims = { 1 },
-};
-
-static const struct v4l2_ctrl_config cipia_set_coarse_int_time = {
-    .ops = &ar0144_ctrl_ops,
-    .id = CIPIA_CID_COARSE_INT_TIME,
-    .name = "CIPIA SET CORASE_INTEGRATION TIME",
-    .type = V4L2_CTRL_TYPE_U32,
     .def = 0x0,
     .min = 0x0,
     .max = 0xFFFF,
@@ -998,11 +1025,7 @@ static int ar0144_probe(struct i2c_client *client,
 	v4l2_ctrl_new_custom(&ar0144->ctrls, &cipia_ae_roi, NULL);
 	v4l2_ctrl_new_custom(&ar0144->ctrls, &cipia_luma_target, NULL);
 	v4l2_ctrl_new_custom(&ar0144->ctrls, &cipia_flash, NULL);
-	v4l2_ctrl_new_custom(&ar0144->ctrls, &cipia_analog_gain, NULL);
-	v4l2_ctrl_new_custom(&ar0144->ctrls, &cipia_en_ds_ae, NULL);
-	v4l2_ctrl_new_custom(&ar0144->ctrls, &cipia_set_coarse_int_time, NULL);
-
-
+	
 	ar0144->sd.ctrl_handler = &ar0144->ctrls;
 
 	v4l2_i2c_subdev_init(&ar0144->sd, client, &ar0144_subdev_ops);
