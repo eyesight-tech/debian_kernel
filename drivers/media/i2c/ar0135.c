@@ -40,7 +40,7 @@
 
 #define AR0135_EXPOSURE_DEFAULT			0x016
 #define AR0135_FLASH_ENABLE				0x0100
-#define MAX_EXPOSURE_TIME				0x0342
+#define MAX_EXPOSURE_TIME				0x005B
 
 #define AR0135_I2C_ADDR      0x10
 #define AR0135_ID_REG        0x3000
@@ -440,12 +440,12 @@ static int set_gain(struct v4l2_subdev *sd)
 	u16 old_val = 0;
 	u16 new_val = 0;
 	u16 shifted_val = 0;
-	printk(KERN_ALERT "AR0135-------->set_gain-------------\n");
+	//printk(KERN_ALERT "AR0135-------->set_gain-------------\n");
 	shifted_val = (core->global_gain << AR0135_ANALOG_GAIN_BIT);
 	ar0135_read_reg(core, AR0135_DIGITAL_TEST, &old_val);
-	printk(KERN_ALERT "AR0135-------->set_gain old value 0x%x\n",old_val);
+	//printk(KERN_ALERT "AR0135-------->set_gain old value 0x%x\n",old_val);
 	new_val = (old_val&mask)|shifted_val;
-	printk(KERN_ALERT "AR0135-------->set_gain global_gain: 0x%x shifted 0x%x write: 0x%x\n",core->global_gain, shifted_val, new_val);
+	//printk(KERN_ALERT "AR0135-------->set_gain global_gain: 0x%x shifted 0x%x write: 0x%x\n",core->global_gain, shifted_val, new_val);
     ret = ar0135_write_reg(core, AR0135_DIGITAL_TEST, new_val);
 	if (ret < 0)
 	{
@@ -453,8 +453,8 @@ static int set_gain(struct v4l2_subdev *sd)
 	}
 
 	ar0135_read_reg(core, AR0135_DIGITAL_TEST, &old_val);
-	printk(KERN_ALERT "-------->set_gain read val: 0x%x\n", old_val);
-	printk(KERN_ALERT "AR0135---------------------\n");
+	//printk(KERN_ALERT "-------->set_gain read val: 0x%x\n", old_val);
+	//printk(KERN_ALERT "AR0135---------------------\n");
 	return ret;
 }
 
@@ -464,7 +464,7 @@ static int set_exposure(struct v4l2_subdev *sd)
 	int ret = 0;
 	u16 val;
 
-	printk(KERN_ALERT "AR0135-------->set_exposure to  0x%x\n",core->exposure);
+	//printk(KERN_ALERT "AR0135-------->set_exposure to  0x%x\n",core->exposure);
     ret = ar0135_write_reg(core, AR0135_R3012_COARSE_INTEGRATION_TIME, core->exposure);
 	if (ret < 0)
 	{
@@ -472,7 +472,7 @@ static int set_exposure(struct v4l2_subdev *sd)
 	}
 
 	ar0135_read_reg(core, AR0135_R3012_COARSE_INTEGRATION_TIME, &val);
-	printk(KERN_ALERT "-------->set_exposure read val: 0x%x\n", val);
+	//printk(KERN_ALERT "-------->set_exposure read val: 0x%x\n", val);
 	return ret;
 }
 
