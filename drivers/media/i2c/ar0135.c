@@ -40,12 +40,20 @@
 
 #define AR0135_EXPOSURE_DEFAULT			0x016
 #define AR0135_FLASH_ENABLE				0x0100
-#define MAX_EXPOSURE_TIME				0x0342
+#define AR0135_MAX_EXPOSURE_TIME		0x0342
+#define AR0135_MAX_EXPOSURE_TIME_RPV	0x005A
+#define AR0135_LUMA_TARGET				0x0550
+#define AR0135_RPV_LUMA_TARGET			0x0490
+
 
 #define AR0135_I2C_ADDR      0x10
 #define AR0135_ID_REG        0x3000
 #define AR0135_ID_VAL        0x0554
 #define AR0135_ANALOG_GAIN_BIT 0x3
+
+#define AR0135_CAMERA_ID 		0xb4
+#define AR0135_RPV_CAMERA_ID 	0xba
+
 
 struct ar0135_reg_value {
 	u16 reg;
@@ -79,7 +87,7 @@ struct AR0135 {
 	u16 ae_roi_x_start_offset;
 	u16 ae_roi_y_start_offset;
 	u16 ae_roi_x_size;
-	u16 ae_roi_y_size;	
+	u16 ae_roi_y_size;
 
 	bool streaming;
 };
@@ -97,7 +105,7 @@ static const struct ar0135_reg_value ar0135at_recommended_setting[] = {
 	{0x302C, 0x0002}, // VT_SYS_CLK_DIV
 	{0x302E, 0x0002}, // PRE_PLL_CLK_DIV
 	{0x3030, 0x0030}, // PLL_MULTIPLIER
-	{0x30B0, 0x0480}, // DIGITAL_TEST    
+	{0x30B0, 0x0480}, // DIGITAL_TEST
 };
 
 static const struct ar0135_reg_value AR0135at_1280x960_30fps[] = {
@@ -105,7 +113,7 @@ static const struct ar0135_reg_value AR0135at_1280x960_30fps[] = {
 	{0x3004, 0x0000},
 	{0x3006, 0x03C0},
 	{0x3008, 0x04FF},
-	{0x300A, 0x05B0}, 
+	{0x300A, 0x05B0},
 	{0x300C, 0x0672},
 	//{0x30B0, 0x04A0}, // DIGITAL_TEST
 	{0x3012, 	},
@@ -123,7 +131,7 @@ static const struct ar0135_reg_value AR0135at_embedded_data_stats[] = {
 static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
 	{AR0135_FLASH_REG, AR0135_FLASH_ENABLE}, // LED_FLASH_EN = 1 -->should sleep for 500ms?
 	{0x311E, 0x0002}, // AE_MIN_EXPOSURE_REG
-	{0x311C, MAX_EXPOSURE_TIME}, // AE_MAX_EXPOSURE_REG (in rows)
+	{0x311C, AR0135_MAX_EXPOSURE_TIME}, // AE_MAX_EXPOSURE_REG (in rows)
 	{0x3108, 0x0010}, // AE_MIN_EV_STEP_REG
 	{0x310A, 0x0008}, // AE_MAX_EV_STEP_REG
 	{0x310C, 0x0200}, // AE_DAMP_OFFSET_REG
@@ -134,9 +142,29 @@ static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
 	{0x3040, 0x0000}, // READ_MODE READ_MODE - HFLIP OFF , VFLIP 0FF
     {0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
 	{0x306E, 0x9010}, // DATAPATH_SELECT
-	{AR0135_R3100_LUMA_TARGET, 0x0550}, // AE_LUMA_TARGET  - change according dynamic ROI fix
-	{0x3100, 0x0011}  // AG*4 static, only integration time is variable 
+	{AR0135_R3100_LUMA_TARGET, AR0135_RPV_LUMA_TARGET}, // AE_LUMA_TARGET  - change according dynamic ROI fix
+	{0x3100, 0x0011}  // AG*4 static, only integration time is variable
 };
+
+static const struct ar0135_reg_value AR0135_RPV_at_auto_exposure[] = {
+	{AR0135_FLASH_REG, AR0135_FLASH_ENABLE}, // LED_FLASH_EN = 1 -->should sleep for 500ms?
+	{0x311E, 0x0002}, // AE_MIN_EXPOSURE_REG
+	{0x311C, AR0135_MAX_EXPOSURE_TIME_RPV}, // AE_MAX_EXPOSURE_REG (in rows)
+	{0x3108, 0x0010}, // AE_MIN_EV_STEP_REG
+	{0x310A, 0x0008}, // AE_MAX_EV_STEP_REG
+	{0x310C, 0x0200}, // AE_DAMP_OFFSET_REG
+	{0x310E, 0x0200}, // AE_DAMP_GAIN_REG
+	{0x3110, 0x0080}, // AE_DAMP_MAX_REG
+//	{0x3166, MAX_EXPOSURE_TIME}, // AE_AG_EXPOSURE_HI
+//	{0x3168, 0x01A3}, // AE_AG_EXPOSURE_LO
+	{0x3040, 0x0000}, // READ_MODE READ_MODE - HFLIP OFF , VFLIP 0FF
+    {0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
+	{0x306E, 0x9010}, // DATAPATH_SELECT
+	{AR0135_R3100_LUMA_TARGET, AR0135_LUMA_TARGET}, // AE_LUMA_TARGET  - change according dynamic ROI fix
+	{0x3100, 0x0011}  // AG*4 static, only integration time is variable
+};
+static const struct ar0135_reg_value *AR0135at_auto_exposure_ptr = NULL;
+static int auto_exposure_array_size = 0;
 
 static const struct ar0135_reg_value AR0135at_start_stream[] = {
 	// {0x3070, 0x0002}, /* generate color bar pattern */
@@ -579,7 +607,7 @@ static int set_flash(struct v4l2_subdev *sd)
 	ret = ar0135_read_reg(core, addr, &value);
 	printk(KERN_ALERT "0x%x value 0x%x\n", addr, value);
 
-	addr = 0x3164;	
+	addr = 0x3164;
 	value = 0;
 	ret = ar0135_read_reg(core, addr, &value);
 	printk(KERN_ALERT "0x%x value 0x%x\n", addr, value);
@@ -618,12 +646,18 @@ static int ar0135_s_stream(struct v4l2_subdev *subdev, int enable)
 					ARRAY_SIZE(AR0135at_embedded_data_stats));
 	if (ret < 0)
 		goto out;
-#if 1 
+#if 1
+	if (AR0135at_auto_exposure_ptr == NULL)
+	{
+		printk(KERN_ALERT "Auto exposure array not configured. aborting\n");
+		return -1;
+	}
+
     printk(KERN_ALERT "r0135_s_stream setting auto exposure\n");
-	ret = ar0135_set_register_array(ar0135, AR0135at_auto_exposure,
-					ARRAY_SIZE(AR0135at_auto_exposure));
+	ret = ar0135_set_register_array(ar0135, AR0135at_auto_exposure_ptr,
+					auto_exposure_array_size);
 #else
-    printk(KERN_ALERT "ar0135_s_stream NO auto exposure - open LEDs\n");   
+    printk(KERN_ALERT "ar0135_s_stream NO auto exposure - open LEDs\n");
     ar0135_write_reg(ar0135, 0x3046, 0x0100);
 #endif
 
@@ -680,7 +714,7 @@ static int ar0135_s_ctrl(struct v4l2_ctrl *ctrl)
 		//printk(KERN_ALERT "-------->ar0135_s_ctrl ROI: Top-left=(0x%x, 0x%x) Size=(0x%x, 0x%x)\n",ctrl->p_cur.p_u16[0],ctrl->p_cur.p_u16[1], ctrl->p_cur.p_u16[2],ctrl->p_cur.p_u16[3]);
         ret = set_ae_roi(sd);
 		break;
-	case CIPIA_CID_LUMA_TARGET:    
+	case CIPIA_CID_LUMA_TARGET:
 		core->luma_target=*(ctrl->p_new.p_u16);
 		//printk(KERN_ALERT "-------->ar0135_s_ctrl LUMA:  0x%x\n",core->luma_target);
 		ret = set_luma_target(sd);
@@ -764,7 +798,7 @@ struct AR0135_fdp_link_init_t {
 	u8 id;
 	u8 addr;
 	u8 val;
-}; 
+};
 
 #if 1
 struct AR0135_fdp_link_init_t AR0135_fdp_link_init_arr[] = {
@@ -775,9 +809,9 @@ struct AR0135_fdp_link_init_t AR0135_fdp_link_init_arr[] = {
 	{0x3d, 0x5D, 0x20}, // AR0135 I2c address
 	{0x3d, 0x65, 0x20}, // AR0135 I2c alias
 	{0x3d, 0x20, 0x20}, // Forwarding enabled for RX Port 0
-	{0x3d, 0x33, 0x23}, // Enable CSI TX, 2 lanes, continouos clock mode enabled	
+	{0x3d, 0x33, 0x23}, // Enable CSI TX, 2 lanes, continouos clock mode enabled
 };
-#else 
+#else
 struct AR0135_fdp_link_init_t AR0135_fdp_link_init_arr[] = {
 	{0x3d, 0x4C, 0x01}, // Enable access to RX port 0 registers
 	{0x3d, 0x58, 0x58}, // Back-channel enabled
@@ -787,7 +821,7 @@ struct AR0135_fdp_link_init_t AR0135_fdp_link_init_arr[] = {
 	{0x3d, 0x5D, 0x20}, // AR0135 I2c address
 	{0x3d, 0x65, 0x20}, // AR0135 I2c alias
 	{0x3d, 0x20, 0x20}, // Forwarding enabled for RX Port 0
-	{0x3d, 0x33, 0x23}, // Enable CSI TX, 2 lanes, continouos clock mode enabled	
+	{0x3d, 0x33, 0x23}, // Enable CSI TX, 2 lanes, continouos clock mode enabled
 };
 #endif
 
@@ -819,7 +853,7 @@ static u8 ar0144_fpd_link_i2c_read(struct i2c_client *ar0144_i2c_client, u8 id, 
 		printk(KERN_ALERT "ar0135_fpd_link_i2c_read error: %d\n", ret);
 		return -1;
 	}
-	
+
 	return result;
 }
 
@@ -861,7 +895,7 @@ static int ar0135_fpd_link_init(struct i2c_client *ar0135_i2c_client)
 						&AR0135_fdp_link_init_arr[i]);
 		if (ret < 0)
 		{
-			printk(KERN_ALERT "ar0135_fpd_link_init adapter: ERROR WRITING: 0x%x addr 0x%x val 0x%x\n", AR0135_fdp_link_init_arr[i].id, AR0135_fdp_link_init_arr[i].addr, AR0135_fdp_link_init_arr[i].val);					 
+			printk(KERN_ALERT "ar0135_fpd_link_init adapter: ERROR WRITING: 0x%x addr 0x%x val 0x%x\n", AR0135_fdp_link_init_arr[i].id, AR0135_fdp_link_init_arr[i].addr, AR0135_fdp_link_init_arr[i].val);
 			return ret;
 		}
 	}
@@ -877,23 +911,37 @@ static int ar0135_probe(struct i2c_client *client,
 	struct AR0135 *ar0135;
 	int ret;
 	u8 camera_id_res = 0;
+	int exposure_time=0;
 	//u8 read_value = 0;
 
 	printk(KERN_ALERT "AR0135_probe\n");
 
 	camera_id_res = ar0144_fpd_link_i2c_read(client, 0x3d, 0x5b);
 	printk(KERN_ALERT "camera id: 0x%x\n", camera_id_res);
-	if (camera_id_res != 0xb4)
+	switch(camera_id_res)
 	{
-		printk(KERN_ALERT "AR0135_probe did not find AR0135 exiting\n");
-		return -EINVAL;
+		case AR0135_CAMERA_ID:
+			printk(KERN_ALERT "AR0135 camera found\n");
+			exposure_time=AR0135_MAX_EXPOSURE_TIME;
+			AR0135at_auto_exposure_ptr = AR0135at_auto_exposure;
+			auto_exposure_array_size = ARRAY_SIZE(AR0135at_auto_exposure);
+			break;
+		case AR0135_RPV_CAMERA_ID:
+			printk(KERN_ALERT "AR0135 RPV camera found\n");
+			exposure_time=AR0135_MAX_EXPOSURE_TIME_RPV;
+			AR0135at_auto_exposure_ptr = AR0135_RPV_at_auto_exposure;
+			auto_exposure_array_size = ARRAY_SIZE(AR0135_RPV_at_auto_exposure);
+			break;
+		default:
+			printk(KERN_ALERT "AR0135_probe did not find AR0135 exiting\n");
+			return -EINVAL;
 	}
 
 	ret = ar0135_fpd_link_init(client);
 	if (ret < 0)
 	{
 		printk(KERN_ALERT "ar0135_probe ar0135_fpd_link_init error\n");
-		return ret;	
+		return ret;
 	}
 
 	ar0135 = devm_kzalloc(dev, sizeof(struct AR0135), GFP_KERNEL);
@@ -910,7 +958,7 @@ static int ar0135_probe(struct i2c_client *client,
 	ar0135->ae_roi_x_start_offset = 0;
 	ar0135->ae_roi_y_start_offset = 0;
 	ar0135->ae_roi_x_size = 1280;
-	ar0135->ae_roi_y_size = 960;		
+	ar0135->ae_roi_y_size = 960;
 
 	endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
 	if (!endpoint) {
@@ -958,7 +1006,7 @@ static int ar0135_probe(struct i2c_client *client,
 	v4l2_ctrl_new_std(&ar0135->ctrls, &AR0135_ctrl_ops,
 			  V4L2_CID_GAIN, 0, 0x40, 1, 0x0E);
 	v4l2_ctrl_new_std(&ar0135->ctrls, &AR0135_ctrl_ops,
-			  V4L2_CID_EXPOSURE, 0, MAX_EXPOSURE_TIME	, 1, AR0135_EXPOSURE_DEFAULT);
+			  V4L2_CID_EXPOSURE, 0, exposure_time	, 1, AR0135_EXPOSURE_DEFAULT);
 	ar0135->exposure = AR0135_EXPOSURE_DEFAULT;
 	v4l2_ctrl_new_std(&ar0135->ctrls, &AR0135_ctrl_ops,
 			  V4L2_CID_HFLIP, 0, 1, 1, 0);
@@ -967,7 +1015,7 @@ static int ar0135_probe(struct i2c_client *client,
 	v4l2_ctrl_new_custom(&ar0135->ctrls, &cipia_ae_roi, NULL);
 	v4l2_ctrl_new_custom(&ar0135->ctrls, &cipia_luma_target, NULL);
 	v4l2_ctrl_new_custom(&ar0135->ctrls, &cipia_flash, NULL);
-	
+
 	ar0135->sd.ctrl_handler = &ar0135->ctrls;
 
 	v4l2_i2c_subdev_init(&ar0135->sd, client, &AR0135_subdev_ops);
@@ -998,11 +1046,11 @@ static int ar0135_probe(struct i2c_client *client,
 
 	ar0135_entity_init_cfg(&ar0135->sd, NULL);
 
-	/*read_value = ar0144_fpd_link_i2c_read(client, 0x5A, 0x0);	
+	/*read_value = ar0144_fpd_link_i2c_read(client, 0x5A, 0x0);
 	printk(KERN_ALERT "----->ar0135_probe register read 0x5A00=0x%x\n", read_value);
-	read_value = ar0144_fpd_link_i2c_read(client, 0x5A, 0x0A);	
+	read_value = ar0144_fpd_link_i2c_read(client, 0x5A, 0x0A);
 	printk(KERN_ALERT "----->ar0135_probe register read 0x5A0A=0x%x\n", read_value);
-	read_value = ar0144_fpd_link_i2c_read(client, 0x5A, 0x0B);	
+	read_value = ar0144_fpd_link_i2c_read(client, 0x5A, 0x0B);
 	printk(KERN_ALERT "----->ar0135_probe register read 0x5A0B=0x%x\n", read_value);*/
 	return 0;
 
