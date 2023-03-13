@@ -921,13 +921,13 @@ static int ar0135_probe(struct i2c_client *client,
 	switch(camera_id_res)
 	{
 		case AR0135_CAMERA_ID:
-			printk(KERN_ALERT "AR0135 camera found\n");
+			printk(KERN_ALERT "AR0135 camera found - Setting configuration\n");
 			exposure_time=AR0135_MAX_EXPOSURE_TIME;
 			AR0135at_auto_exposure_ptr = AR0135at_auto_exposure;
 			auto_exposure_array_size = ARRAY_SIZE(AR0135at_auto_exposure);
 			break;
 		case AR0135_RPV_CAMERA_ID:
-			printk(KERN_ALERT "AR0135 RPV camera found\n");
+			printk(KERN_ALERT "AR0135 RPV camera found - Setting configuration\n");
 			exposure_time=AR0135_MAX_EXPOSURE_TIME_RPV;
 			AR0135at_auto_exposure_ptr = AR0135_RPV_at_auto_exposure;
 			auto_exposure_array_size = ARRAY_SIZE(AR0135_RPV_at_auto_exposure);
