@@ -22,7 +22,7 @@
 #include <media/v4l2-subdev.h>
 
 #define CIPIA_KERNEL_VERSION 3
-#define CIPIA_KERNEL_DEBUG_VERSION 2
+#define CIPIA_KERNEL_DEBUG_VERSION 4
 #define CIPIA_CID_CUSTOM_BASE  			(V4L2_CID_USER_BASE | 0xf000)
 #define CIPIA_CID_AE_ROI       			(CIPIA_CID_CUSTOM_BASE + 0)
 #define CIPIA_CID_LUMA_TARGET  			(CIPIA_CID_CUSTOM_BASE + 1)
@@ -111,12 +111,11 @@ static const struct ar0135_reg_value ar0135at_recommended_setting[] = {
 };
 
 static const struct ar0135_reg_value ar0135at_recommended_setting_RPV[] = {
-	/* PLL 27Mhz */
-	{0x302A, 0x0008}, // VT_PIX_CLK_DIV
-	{0x302C, 0x0001}, // VT_SYS_CLK_DIV
+	{0x301A, 0x10D8}, // RESET_REGISTER
+	{0x302C, 0x0002}, // VT_SYS_CLK_DIV
+	{0x302A, 0x0004}, // VT_PIX_CLK_DIV
 	{0x302E, 0x0002}, // PRE_PLL_CLK_DIV
-	{0x3030, 0x0030}, // PLL_MULTIPLIER
-	{0x30B0, 0x0090}, // DIGITAL_TEST
+	{SLEEP, 100}
 };
 
 static const struct ar0135_reg_value AR0135at_1280x960_30fps[] = {
@@ -127,7 +126,7 @@ static const struct ar0135_reg_value AR0135at_1280x960_30fps[] = {
 	{0x300A, 0x05B0},
 	{0x300C, 0x0672},
 	//{0x30B0, 0x04A0}, // DIGITAL_TEST
-	{0x3012, 	},
+	{0x3012, 0x0122},
 	// {0x3012, 0x0020},
 	{0x30A2, 0x0001},
 	{0x30A6, 0x0001},
@@ -135,22 +134,23 @@ static const struct ar0135_reg_value AR0135at_1280x960_30fps[] = {
 	{0x3028, 0x0010}, // ROW_SPEED
 };
 
+
 static const struct ar0135_reg_value AR0135at_1280x960_30fps_RPV[] = {
 	{0x3002, 0x0000},
 	{0x3004, 0x0000},
 	{0x3006, 0x03C0},
 	{0x3008, 0x04FF},
-	{0x300A, 0x05b0},
+	{0x300A, 0x05B0},
 	{0x300C, 0x0672},
-	//{0x30B0, 0x04A0}, // DIGITAL_TEST
-	{0x3012, 0x0020},
-	{0x3014, 0x0000}, //FINE_INTEGRATION_TIME = 0
+	{0x3012, 0x0050},
+	{0x3014, 0x0000},
 	{0x30A2, 0x0001},
 	{0x30A6, 0x0001},
-	{0x3040, 0x0000}, 	// READ_MODE - HFLIP OFF , VFLIP 0FF
+	{0x3040, 0x0000}, // READ_MODE - HFLIP OFF , VFLIP 0FF
 	{0x301C, 0x0100},
-	{0x3028, 0x0100}, 	// ROW_SPEED
-	{0x301A, 0x10DC} 	// RESET_REGISTER
+	{0x3028, 0x0010}, // ROW_SPEED
+	{SLEEP, 500},
+	{0x301A, 0x10DC}, // RESET_REGISTER
 };
 
 static const struct ar0135_reg_value AR0135at_embedded_data_stats[] = {
@@ -172,30 +172,36 @@ static const struct ar0135_reg_value AR0135at_auto_exposure[] = {
 	{0x3040, 0x0000}, // READ_MODE READ_MODE - HFLIP OFF , VFLIP 0FF
     {0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
 	{0x306E, 0x9010}, // DATAPATH_SELECT
-	//{AR0135_R3100_LUMA_TARGET, AR0135_LUMA_TARGET}, // AE_LUMA_TARGET  - change according dynamic ROI fix
-	{AR0135_R3100_LUMA_TARGET, AR0135_RPV_LUMA_TARGET}, // AE_LUMA_TARGET  - change according dynamic ROI fix
+	{AR0135_R3100_LUMA_TARGET, AR0135_LUMA_TARGET}, // AE_LUMA_TARGET  - change according dynamic ROI fix
 	{0x3100, 0x0011}  // AG*4 static, only integration time is variable
 };
 
 static const struct ar0135_reg_value AR0135_RPV_at_auto_exposure[] = {
-	{AR0135_FLASH_REG, AR0135_FLASH_ENABLE}, // LED_FLASH_EN = 1 -->should sleep for 500ms?
-	{0x311E, 0x0001}, // AE_MIN_EXPOSURE_REG
-	{0x311C, AR0135_MAX_EXPOSURE_TIME_RPV}, // AE_MAX_EXPOSURE_REG (in rows)
+	//{0x3100, 0x0001}, // AE_CTRL_REG
+	{0x3102, 0x0490}, // AE_LUMA_TARGET_REG
+	{0x3046, 0x0100}, // FLASH
+	{0x311C, 0x005A}, // AE_MAX_EXPOSURE_REG
 	{0x3108, 0x0010}, // AE_MIN_EV_STEP_REG
 	{0x310A, 0x0008}, // AE_MAX_EV_STEP_REG
-	{0x310C, 0x0200}, // AE_DAMP_OFFSET_REG
-	{0x310E, 0x0200}, // AE_DAMP_GAIN_REG
-	{0x3110, 0x0080}, // AE_DAMP_MAX_REG
-//	{0x3166, MAX_EXPOSURE_TIME}, // AE_AG_EXPOSURE_HI
-//	{0x3168, 0x01A3}, // AE_AG_EXPOSURE_LO
-	{0x3040, 0x0000}, // READ_MODE READ_MODE - HFLIP OFF , VFLIP 0FF
-    {0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
+	{0x310C, 0x0100}, // AE_DAMP_OFFSET_REG
+	{0x310E, 0x0100}, // AE_DAMP_GAIN_REG
+	{0x3110, 0x00E0}, // AE_DAMP_MAX_REG
+	{0x311E, 0x0008}, // AE_MIN_EXPOSURE_REG
+	{0x3064, 0x1982}, // EMBEDDED_DATA_CTRL
 	{0x301E, 0x00C8}, // DATA_PEDESTAL
 	{0x306E, 0xFC10}, // DATAPATH_SELECT
-	{AR0135_R3100_LUMA_TARGET, AR0135_RPV_LUMA_TARGET}, // AE_LUMA_TARGET  - change according dynamic ROI fix
-	{0x3100, 0x0001},  // AG*4 static, only integration time is variable
-	//{0x3030, 0x0030} // PLL_MULTIPLIER
+	{0x3030, 0x0030}, // PLL_MULTIPLIER
+	{0x30B0, 0x04A0}, // DIGITAL_TEST
+//[ReTriggering Column Correction]
+	{0x30D4, 0x6007}, // COLUMN_CORRECTION
+	{0x301A, 0x10DC}, // RESET_REGISTER
+	{SLEEP, 50},
+	{0x301A, 0x10D8}, // RESET_REGISTER
+	{0x30D4, 0xE007}, // COLUMN_CORRECTION
+	{SLEEP, 100},
+	{0x301A, 0x10DC} // RESET_REGISTER
 };
+
 static const struct ar0135_reg_value *AR0135at_auto_exposure_ptr = NULL;
 static int auto_exposure_array_size = 0;
 
@@ -973,20 +979,21 @@ static int ar0135_probe(struct i2c_client *client,
 
 			break;
 		case AR0135_RPV_CAMERA_ID:
-			printk(KERN_ALERT "AR0135 RPV camera found - Setting configuration\n");
+			printk(KERN_ALERT "AR0135 RPV camera found(100325) - Setting configuration\n");
 			exposure_time=AR0135_MAX_EXPOSURE_TIME_RPV;
 			AR0135at_auto_exposure_ptr 	= AR0135_RPV_at_auto_exposure;
 			auto_exposure_array_size 	= ARRAY_SIZE(AR0135_RPV_at_auto_exposure);
+			printk(KERN_ALERT "AR0135 RPV camera found(100325) auto exporsure = 0x%x- Setting configuration\n", exposure_time);
 
-			// ar0135at_recommended_setting_ptr 	= ar0135at_recommended_setting_RPV;
-			// ar0135at_recommended_setting_size 	= sizeof(ar0135at_recommended_setting_RPV);
-			ar0135at_recommended_setting_ptr 	= ar0135at_recommended_setting;
-			ar0135at_recommended_setting_size 	= sizeof(ar0135at_recommended_setting);
+			ar0135at_recommended_setting_ptr 	= ar0135at_recommended_setting_RPV;
+			ar0135at_recommended_setting_size 	= sizeof(ar0135at_recommended_setting_RPV);
+			// ar0135at_recommended_setting_ptr 	= ar0135at_recommended_setting;
+			// ar0135at_recommended_setting_size 	= sizeof(ar0135at_recommended_setting);
 
-			// AR0135at_1280x960_30fps_ptr 	= AR0135at_1280x960_30fps_RPV;
-			// AR0135at_1280x960_30fps_size 	= ARRAY_SIZE(AR0135at_1280x960_30fps_RPV);
-			AR0135at_1280x960_30fps_ptr 	= AR0135at_1280x960_30fps;
-			AR0135at_1280x960_30fps_size 	= ARRAY_SIZE(AR0135at_1280x960_30fps);
+			AR0135at_1280x960_30fps_ptr 	= AR0135at_1280x960_30fps_RPV;
+			AR0135at_1280x960_30fps_size 	= ARRAY_SIZE(AR0135at_1280x960_30fps_RPV);
+			// AR0135at_1280x960_30fps_ptr 	= AR0135at_1280x960_30fps;
+			// AR0135at_1280x960_30fps_size 	= ARRAY_SIZE(AR0135at_1280x960_30fps);
 			break;
 		default:
 			printk(KERN_ALERT "AR0135_probe did not find AR0135 exiting\n");
@@ -1007,7 +1014,7 @@ static int ar0135_probe(struct i2c_client *client,
 	ar0135->i2c_client = client;
 	ar0135->dev = dev;
 	mutex_init(&ar0135->lock);
-	dev_info(dev, "AR0135 camera detected version 1.14.1\n");
+	dev_info(dev, "AR0135 camera detected version 1.17.1\n");
 
 	// default values //
 	ar0135->ae = 1;
